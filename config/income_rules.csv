@@ -1,0 +1,11 @@
+air,courses,gear hire,memberships,social,merch,trips,specialtrips,misc
+\bair fills?\b,\bopen water\b,\bhire\b,\bmembership\b,\bsoft drink\b,\bmisc\s*-\s*merch\b,\bboat dive\b,\bwilsons? prom\b,\bmisc\b
+\boxygen\b,\baow\b,\bfull gear\b,\bliability waiver\b,\bpremium drink\b,\bmerch\b,\bboat dives\b,\bprom trip\b,
+\bnitrox\b,\badvanced\b,\bselected item\b,\bvisitor membership\b,\bother drink\b,\btee\b,\bboat diving\b,\bovernight\b,
+\bannual air fill\b,\brescue course\b,\bgear deposit\b,\btrial membership\b,\bmisc\s*-\s*other\b,\bhat\b,\bcar fee\b,\bairbnb deposit\b,
+\bportable compressor air fill only\b,\bcourse deposit\b,\bannual tank\b,\balumni and staff\b,\bsocial event contribution\b,\bbeanie\b,\bshore dive\b,\baccommodation deposit\b,
+,\bow deposit\b,\b1 year full gear\b,\bnon-student\b,\bbbq\b,\bpatch\b,\bphill?ip island\b,\baccommodation and general admission\b,
+,\bfull course payment\b,\b1/2 year full gear\b,\bstudent of other university\b,,,\bbarwon heads\b,\btrip deposit\b,
+,\bcourse\b,,,,,\bport philip bay\b,\bdeposit\b,
+,\bpool session\b,,,,,\bheads boat dives\b,\bdaytrip\b,
+,,,,,,,\bgeneral admission\b,
