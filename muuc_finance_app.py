@@ -425,7 +425,10 @@ class ChartCanvas(tk.Canvas):
         self.width = width
         self.height = height
         self._render_state = ("empty", {"message": "No data loaded."})
+        self._tooltip_bg = None
+        self._tooltip_text = None
         self.bind("<Configure>", self._handle_configure)
+        self.bind("<Leave>", lambda _event: self._hide_tooltip())
 
     def _handle_configure(self, event) -> None:
         self.width = max(int(event.width), 80)
@@ -443,6 +446,53 @@ class ChartCanvas(tk.Canvas):
 
     def clear(self) -> None:
         self.delete("all")
+        self._tooltip_bg = None
+        self._tooltip_text = None
+
+    def _show_tooltip(self, x: int, y: int, text: str) -> None:
+        if self._tooltip_bg is None or self._tooltip_text is None:
+            self._tooltip_text = self.create_text(
+                0,
+                0,
+                text=text,
+                anchor="nw",
+                font=("Helvetica", 9),
+                fill=TEXT_PRIMARY,
+                state="hidden",
+            )
+            self._tooltip_bg = self.create_rectangle(
+                0,
+                0,
+                0,
+                0,
+                fill=BG_ACCENT,
+                outline=BORDER,
+                state="hidden",
+            )
+            self.tag_raise(self._tooltip_text, self._tooltip_bg)
+
+        pad = 6
+        tx = min(max(x + 14, 8), max(self.width - 180, 8))
+        ty = min(max(y + 14, 8), max(self.height - 48, 8))
+        self.itemconfigure(self._tooltip_text, text=text, state="normal")
+        self.coords(self._tooltip_text, tx + pad, ty + pad)
+        bbox = self.bbox(self._tooltip_text)
+        if bbox:
+            self.coords(self._tooltip_bg, bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad)
+            self.itemconfigure(self._tooltip_bg, state="normal")
+            self.tag_raise(self._tooltip_bg)
+            self.tag_raise(self._tooltip_text)
+
+    def _hide_tooltip(self) -> None:
+        if self._tooltip_bg is not None:
+            self.itemconfigure(self._tooltip_bg, state="hidden")
+        if self._tooltip_text is not None:
+            self.itemconfigure(self._tooltip_text, state="hidden")
+
+    def _bind_hover(self, tag: str, tooltip_text: str) -> None:
+        self.tag_bind(tag, "<Enter>", lambda event, text=tooltip_text: self._show_tooltip(event.x, event.y, text))
+        self.tag_bind(tag, "<Motion>", lambda event, text=tooltip_text: self._show_tooltip(event.x, event.y, text))
+        self.tag_bind(tag, "<Leave>", lambda _event: self._hide_tooltip())
 
     def draw_empty(self, message: str) -> None:
         self._render_state = ("empty", {"message": message})
@@ -469,12 +519,16 @@ class ChartCanvas(tk.Canvas):
         x1, y1 = 20, 40
         x2, y2 = x1 + chart_diameter, y1 + chart_diameter
         start = 0.0
-        for category, amount in values.items():
+        for idx, (category, amount) in enumerate(values.items()):
             if amount <= 0:
                 continue
             extent = (amount / total) * 360.0
             color = CATEGORY_COLORS.get(category, "#cccccc")
-            self.create_arc(x1, y1, x2, y2, start=start, extent=extent, fill=color, outline=BG_PANEL)
+            pct = 0 if total == 0 else (amount / total) * 100
+            hover_tag = f"pie_hover_{idx}"
+            tooltip_text = f"{category}\n{currency(float(amount))} ({pct:.1f}%)"
+            self.create_arc(x1, y1, x2, y2, start=start, extent=extent, fill=color, outline=BG_PANEL, tags=(hover_tag,))
+            self._bind_hover(hover_tag, tooltip_text)
             start += extent
 
         legend_x = x2 + 24
@@ -482,8 +536,10 @@ class ChartCanvas(tk.Canvas):
         for idx, (category, amount) in enumerate(values.items()):
             color = CATEGORY_COLORS.get(category, "#cccccc")
             y = legend_y + idx * 24
-            self.create_rectangle(legend_x, y, legend_x + 14, y + 14, fill=color, outline=color)
             pct = 0 if total == 0 else (amount / total) * 100
+            hover_tag = f"pie_hover_{idx}"
+            tooltip_text = f"{category}\n{currency(float(amount))} ({pct:.1f}%)"
+            self.create_rectangle(legend_x, y, legend_x + 14, y + 14, fill=color, outline=color, tags=(hover_tag,))
             self.create_text(
                 legend_x + 22,
                 y + 7,
@@ -491,7 +547,9 @@ class ChartCanvas(tk.Canvas):
                 text=f"{category}: {currency(float(amount))} ({pct:.1f}%)",
                 font=("Helvetica", 10),
                 fill=TEXT_PRIMARY,
+                tags=(hover_tag,),
             )
+            self._bind_hover(hover_tag, tooltip_text)
 
     def draw_monthly_bars(self, income: pd.Series, expenses: pd.Series, title: str) -> None:
         self._render_state = ("monthly", {"income": income.copy(), "expenses": expenses.copy(), "title": title})
@@ -517,7 +575,16 @@ class ChartCanvas(tk.Canvas):
         group_width = (right - left) / max(len(month_labels), 1)
         bar_width = min(28, max(group_width / 3, 10))
 
+        ticks = 4
+        self.create_line(left, top, left, bottom, fill=BORDER)
         self.create_line(left, bottom, right, bottom, fill=BORDER)
+        for tick in range(ticks + 1):
+            ratio = tick / ticks
+            y = bottom - ((bottom - top - 20) * ratio)
+            value = max_value * ratio
+            self.create_line(left - 5, y, left, y, fill=BORDER)
+            self.create_text(left - 10, y, text=currency(value), fill=TEXT_MUTED, font=("Helvetica", 8), anchor="e")
+
         self.create_rectangle(self.width - 180, 18, self.width - 166, 32, fill="#4c78a8", outline="#4c78a8")
         self.create_text(self.width - 160, 25, anchor="w", text="Income", fill=TEXT_PRIMARY, font=("Helvetica", 10))
         self.create_rectangle(self.width - 90, 18, self.width - 76, 32, fill="#e45756", outline="#e45756")
@@ -530,6 +597,7 @@ class ChartCanvas(tk.Canvas):
             income_height = ((bottom - top) - 20) * (income_value / max_value)
             expense_height = ((bottom - top) - 20) * (expense_value / max_value)
 
+            income_tag = f"monthly_income_{idx}"
             self.create_rectangle(
                 center_x - bar_width - 2,
                 bottom - income_height,
@@ -537,7 +605,10 @@ class ChartCanvas(tk.Canvas):
                 bottom,
                 fill="#4c78a8",
                 outline="",
+                tags=(income_tag,),
             )
+            self._bind_hover(income_tag, f"{label}\nIncome: {currency(income_value)}")
+            expense_tag = f"monthly_expense_{idx}"
             self.create_rectangle(
                 center_x + 2,
                 bottom - expense_height,
@@ -545,7 +616,9 @@ class ChartCanvas(tk.Canvas):
                 bottom,
                 fill="#e45756",
                 outline="",
+                tags=(expense_tag,),
             )
+            self._bind_hover(expense_tag, f"{label}\nExpenses: {currency(expense_value)}")
             self.create_text(center_x, bottom + 14, text=label, fill=TEXT_PRIMARY, font=("Helvetica", 9))
 
 class FinanceAnalyzerApp:
@@ -1010,7 +1083,7 @@ class FinanceAnalyzerApp:
 
     def refresh_breakdown(self) -> None:
         self.populate_breakdown_tree(self.income_breakdown_tree, self.filtered_income, strip_purchase_prefix=True)
-        self.populate_breakdown_tree(self.expense_breakdown_tree, self.filtered_expenses)
+        self.populate_breakdown_tree(self.expense_breakdown_tree, self.filtered_expenses, strip_purchase_prefix=True)
 
     def populate_breakdown_tree(self, tree: ttk.Treeview, frame: pd.DataFrame, strip_purchase_prefix: bool = False) -> None:
         tree.delete(*tree.get_children())
