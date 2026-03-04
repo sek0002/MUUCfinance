@@ -217,8 +217,12 @@ def parse_stripe_income(
     refund_expenses["source"] = "stripe refund"
     refund_expenses.rename(columns={"refunded_amount": "amount", "id": "reference"}, inplace=True)
     expenses = pd.concat([fee_expenses, refund_expenses], ignore_index=True, sort=False)
-    expenses = expenses[["date", "description", "category", "matched", "amount", "source", "reference"]]
-    income = pd.DataFrame(columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"])
+    expenses["name"] = ""
+    expenses["email"] = ""
+    expenses = expenses[["date", "description", "category", "matched", "amount", "source", "reference", "name", "email"]]
+    income = pd.DataFrame(
+        columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]
+    )
     return income, expenses
 
 
@@ -231,6 +235,7 @@ def parse_teamapp_income(
     df["date"] = pd.to_datetime(df["date"], format="%Y-%b-%d", errors="coerce")
     df["paid_normalized"] = df["paid"].fillna("").astype(str).str.strip().str.upper()
     df = df[df["paid_normalized"] == "YES"].copy()
+    df = df[df["date"] >= pd.Timestamp("2025-01-01")].copy()
     df["description"] = df["items"].fillna("")
     df["amount"] = (
         df["total"]
@@ -240,16 +245,20 @@ def parse_teamapp_income(
         .str.replace(",", "", regex=False)
     )
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+    df["name"] = df["name"].fillna("").astype(str)
+    df["email"] = df["email"].fillna("").astype(str)
     compiled = compile_rule_map(rule_df, INCOME_CATEGORIES)
     if df.empty:
-        return pd.DataFrame(columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"])
+        return pd.DataFrame(
+            columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]
+        )
     categories, matched = zip(*df["description"].map(lambda value: match_category(value, compiled, INCOME_CATEGORIES)))
     df["category"] = list(categories)
     df["matched"] = list(matched)
     df["source"] = "teamapp income"
     df["reference"] = df["purchase_id"].fillna("").astype(str)
     df["refunded_amount"] = 0.0
-    return df[["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"]]
+    return df[["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]]
 
 
 def parse_everyday_expenses(
@@ -273,7 +282,9 @@ def parse_everyday_expenses(
     df["matched"] = list(matched)
     df["source"] = "everyday expense"
     df["reference"] = ""
-    return df[["date", "description", "category", "matched", "amount", "source", "reference"]]
+    df["name"] = ""
+    df["email"] = ""
+    return df[["date", "description", "category", "matched", "amount", "source", "reference", "name", "email"]]
 
 
 def load_analysis(
@@ -953,11 +964,18 @@ class FinanceAnalyzerApp:
         income_breakdown.rowconfigure(0, weight=1)
         self.income_breakdown_tree = ttk.Treeview(
             income_breakdown,
-            columns=("date", "category", "identifier", "amount"),
+            columns=("date", "category", "identifier", "name", "email", "amount"),
             show="headings",
             height=14,
         )
-        for name, width in (("date", 100), ("category", 110), ("identifier", 380), ("amount", 120)):
+        for name, width in (
+            ("date", 100),
+            ("category", 110),
+            ("identifier", 290),
+            ("name", 160),
+            ("email", 220),
+            ("amount", 120),
+        ):
             self.income_breakdown_tree.heading(name, text=name.title())
             self.income_breakdown_tree.column(name, width=width, anchor="w" if name != "amount" else "e")
         self.income_breakdown_tree.grid(row=0, column=0, sticky="nsew")
@@ -1056,19 +1074,22 @@ class FinanceAnalyzerApp:
             state="readonly",
         ).grid(row=0, column=1, sticky="w", padx=(8, 0))
         ttk.Button(controls, text="Refresh Table", command=self.refresh_transactions).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        ttk.Button(controls, text="Export Table", command=self.export_transactions).grid(row=0, column=3, sticky="w", padx=(8, 0))
 
         self.transaction_tree = ttk.Treeview(
             parent,
-            columns=("date", "source", "category", "amount", "matched", "description"),
+            columns=("date", "source", "category", "name", "email", "amount", "matched", "description"),
             show="headings",
         )
         headings = {
             "date": 110,
             "source": 130,
             "category": 120,
+            "name": 160,
+            "email": 220,
             "amount": 110,
             "matched": 80,
-            "description": 760,
+            "description": 540,
         }
         for column, width in headings.items():
             self.transaction_tree.heading(column, text=column.title())
@@ -1231,21 +1252,25 @@ class FinanceAnalyzerApp:
         if frame.empty:
             return
         ordered = frame.sort_values(["category", "date", "amount"], ascending=[True, True, False])
+        show_contact_fields = tree == self.income_breakdown_tree
         for _, row in ordered.iterrows():
             dt = pd.to_datetime(row.get("date"), errors="coerce")
             display_date = "" if pd.isna(dt) else dt.strftime("%Y-%m-%d")
             identifier = row.get("description") or row.get("reference") or ""
             if strip_purchase_prefix and isinstance(identifier, str):
                 identifier = re.sub(r"^MUUC\s+(?:Ticketing\s+)?Purchase\s+Id:\s*\d+\s*-\s*", "", identifier, flags=re.IGNORECASE)
+            values = [
+                display_date,
+                row.get("category", ""),
+                identifier,
+            ]
+            if show_contact_fields:
+                values.extend([row.get("name", ""), row.get("email", "")])
+            values.append(currency(float(row.get("amount", 0.0))))
             tree.insert(
                 "",
                 "end",
-                values=(
-                    display_date,
-                    row.get("category", ""),
-                    identifier,
-                    currency(float(row.get("amount", 0.0))),
-                ),
+                values=tuple(values),
             )
 
     def refresh_monthly_chart(self) -> None:
@@ -1337,18 +1362,7 @@ class FinanceAnalyzerApp:
 
     def refresh_transactions(self) -> None:
         self.transaction_tree.delete(*self.transaction_tree.get_children())
-        view = self.transaction_view_var.get()
-
-        if view == "Income":
-            frame = self.filtered_income
-        elif view == "Expenses":
-            frame = self.filtered_expenses
-        elif view == "Income Misc":
-            frame = filter_frame(self.analysis.misc_income, *self.current_period_range())
-        elif view == "Expense Misc":
-            frame = filter_frame(self.analysis.misc_expenses, *self.current_period_range())
-        else:
-            frame = pd.concat([self.filtered_income, self.filtered_expenses], ignore_index=True, sort=False).sort_values("date")
+        frame = self.current_transactions_frame()
 
         for _, row in frame.tail(500).iterrows():
             dt = pd.to_datetime(row.get("date"), errors="coerce")
@@ -1360,11 +1374,42 @@ class FinanceAnalyzerApp:
                     display_date,
                     row.get("source", ""),
                     row.get("category", ""),
+                    row.get("name", ""),
+                    row.get("email", ""),
                     currency(float(row.get("amount", 0.0))),
                     "Yes" if bool(row.get("matched")) else "No",
                     row.get("description", ""),
                 ),
             )
+
+    def current_transactions_frame(self) -> pd.DataFrame:
+        view = self.transaction_view_var.get()
+
+        if view == "Income":
+            return self.filtered_income.copy()
+        if view == "Expenses":
+            return self.filtered_expenses.copy()
+        if view == "Income Misc":
+            return filter_frame(self.analysis.misc_income, *self.current_period_range())
+        if view == "Expense Misc":
+            return filter_frame(self.analysis.misc_expenses, *self.current_period_range())
+        return pd.concat([self.filtered_income, self.filtered_expenses], ignore_index=True, sort=False).sort_values("date")
+
+    def export_transactions(self) -> None:
+        frame = self.current_transactions_frame()
+        export_path = filedialog.asksaveasfilename(
+            title="Export transactions table",
+            defaultextension=".csv",
+            initialfile="transactions_export.csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if not export_path:
+            return
+        frame = frame.copy()
+        if not frame.empty:
+            frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+        frame.to_csv(export_path, index=False)
+        self.status_var.set(f"Exported transactions to {Path(export_path).name}")
 
 
 def print_cli_summary() -> None:
