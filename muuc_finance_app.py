@@ -203,13 +203,20 @@ def parse_stripe_income(
     df["refunded_amount"] = pd.to_numeric(df["Converted Amount Refunded"], errors="coerce").fillna(0.0)
     df["fee_amount"] = pd.to_numeric(df["Fee"], errors="coerce").fillna(0.0)
     df = df[~df["status_normalized"].isin({"failed", "requires_payment_method"})].copy()
+    refund_mask = df["status_normalized"].isin({"refunded", "refund"}) | (df["refunded_amount"] > 0)
 
     fee_expenses = df[df["fee_amount"] > 0][["date", "description", "fee_amount", "id"]].copy()
     fee_expenses["category"] = "fees"
     fee_expenses["matched"] = True
     fee_expenses["source"] = "stripe fee"
     fee_expenses.rename(columns={"fee_amount": "amount", "id": "reference"}, inplace=True)
-    expenses = fee_expenses.copy()
+    refund_expenses = df[refund_mask][["date", "description", "refunded_amount", "id"]].copy()
+    refund_expenses = refund_expenses[refund_expenses["refunded_amount"] > 0].copy()
+    refund_expenses["category"] = "refunds"
+    refund_expenses["matched"] = True
+    refund_expenses["source"] = "stripe refund"
+    refund_expenses.rename(columns={"refunded_amount": "amount", "id": "reference"}, inplace=True)
+    expenses = pd.concat([fee_expenses, refund_expenses], ignore_index=True, sort=False)
     expenses = expenses[["date", "description", "category", "matched", "amount", "source", "reference"]]
     income = pd.DataFrame(columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"])
     return income, expenses
