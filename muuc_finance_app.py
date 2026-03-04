@@ -11,7 +11,7 @@ import webbrowser
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 import pandas as pd
 
@@ -135,10 +135,6 @@ def ensure_user_rule_file(filename: str) -> Path:
     USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     user_path = USER_CONFIG_DIR / filename
     if user_path.exists():
-        if BASE_DIR == RUNTIME_DIR:
-            project_path = BASE_DIR / "config" / filename
-            project_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(user_path, project_path)
         return user_path
 
     bundled_path = CONFIG_DIR / filename
@@ -399,18 +395,15 @@ class RuleTableEditor(ttk.LabelFrame):
         for category in categories:
             self.tree.heading(category, text=category)
             self.tree.column(category, width=145, anchor="w")
-        self.tree.grid(row=0, column=0, columnspan=4, sticky="nsew")
+        self.tree.grid(row=0, column=0, columnspan=5, sticky="nsew")
         self.tree.bind("<Double-1>", self.edit_selected_cell)
-
-        yscroll = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=yscroll.set)
-        yscroll.grid(row=0, column=4, sticky="ns")
 
         ttk.Button(self, text="Add Row", command=self.add_row).grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Button(self, text="Delete Row", command=self.delete_row).grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         ttk.Button(self, text="Save Rules", command=self.save).grid(row=1, column=2, sticky="w", padx=(8, 0), pady=(8, 0))
+        ttk.Button(self, text="Export CSV", command=self.export_rules).grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
         ttk.Label(self, text="Double-click a cell to edit its regex. Blank cells are ignored.").grid(
-            row=1, column=3, sticky="e", padx=(8, 0), pady=(8, 0)
+            row=1, column=4, sticky="e", padx=(8, 0), pady=(8, 0)
         )
 
         self.columnconfigure(0, weight=1)
@@ -452,6 +445,17 @@ class RuleTableEditor(ttk.LabelFrame):
     def save(self) -> None:
         save_rule_table(self.file_path, self.df, self.categories)
         self.on_save()
+
+    def export_rules(self) -> None:
+        export_path = filedialog.asksaveasfilename(
+            title="Export rule table",
+            defaultextension=".csv",
+            initialfile=self.file_path.name,
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if not export_path:
+            return
+        save_rule_table(Path(export_path), self.df, self.categories)
 
 
 class ChartCanvas(tk.Canvas):

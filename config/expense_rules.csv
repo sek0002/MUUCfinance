@@ -1,12 +1,12 @@
-fees,air,car/boat,compressor,courses,gear,refunds,social,specialtrips,trips,misc
-stripe,supa,linkt,compressor,course,gear,refund,social,wilson,fuel,merch
-fee,supagas,rego,S4897,education,knife,,bbq,prom,trip,inv
-,gas,insurance,,FLEM713,cosensor,,drink,overnight,petrol,
-,oxygen,aami,,university of melbourne,service,,Misc - Other,airbnb,,
-,cylinders,vicroads,,melb uni receivables,inv2549,,,specialtrip,,transfer muuc
-,air,boat,,pools,INV-,,,,,
-,,car,,,C894772,,,,,funds trns
-,,RACV,,,S.D,,,,,
-,,Regal,,,2775,,,,,
-,,,,,22914,,,,,
-,,,,,4284,,,,,
+fees,air,car/boat,compressor,courses,gear,gear servicing,refunds,social,specialtrips,trips,misc
+stripe,supa,linkt,compressor,course,gear,service,refund,social,wilson,fuel,merch
+fee,supagas,rego,S4897,education,knife,inv2549,,bbq,prom,trip,inv
+,gas,insurance,COsensor,FLEM713,,C894772,,drink,overnight,petrol,
+,oxygen,aami,cosensor,university of melbourne,,S.D,,Misc - Other,airbnb,,
+,cylinders,vicroads,,melb uni receivables,,2775,,5791,specialtrip,,transfer muuc
+,air,boat,,pools,,19960,,6591,,,
+,,car,,22914,,19979,,,,,funds trns
+,,RACV,,4284,,,,,,,
+,,Regal,,7153334,,,,,,,
+,,,,FlemINV,22914,,,,,,
+,,,,,4284,,,,,,
