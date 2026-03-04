@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
+import json
 import re
 import shutil
 import sys
@@ -20,6 +22,7 @@ RUNTIME_DIR = Path(getattr(sys, "_MEIPASS", str(BASE_DIR)))
 CONFIG_DIR = RUNTIME_DIR / "config"
 SETTINGS_DIR = Path.home() / ".muuc_finance_analyzer"
 USER_CONFIG_DIR = SETTINGS_DIR / "config"
+BUNDLED_RULES_STATE_FILE = USER_CONFIG_DIR / "bundled_rules_state.json"
 
 BG_PRIMARY = "#16181c"
 BG_PANEL = "#1f232a"
@@ -50,6 +53,7 @@ EXPENSE_CATEGORIES = [
     "compressor",
     "courses",
     "gear",
+    "gear servicing",
     "refunds",
     "social",
     "specialtrips",
@@ -71,6 +75,7 @@ CATEGORY_COLORS = {
     "car/boat": "#5f8dd3",
     "compressor": "#7a9e9f",
     "gear": "#89a54e",
+    "gear servicing": "#4f7f6f",
     "refunds": "#d94f70",
 }
 
@@ -89,7 +94,44 @@ def default_file_paths() -> dict[str, str]:
     }
 
 
+def bundled_rules_fingerprint() -> str:
+    hasher = hashlib.sha256()
+    for filename in ("income_rules.csv", "expense_rules.csv"):
+        bundled_path = CONFIG_DIR / filename
+        hasher.update(filename.encode("utf-8"))
+        if bundled_path.exists():
+            hasher.update(bundled_path.read_bytes())
+    return hasher.hexdigest()
+
+
+def sync_bundled_rules_if_updated() -> None:
+    USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    current_fingerprint = bundled_rules_fingerprint()
+    stored_fingerprint = ""
+    if BUNDLED_RULES_STATE_FILE.exists():
+        try:
+            payload = json.loads(BUNDLED_RULES_STATE_FILE.read_text(encoding="utf-8"))
+            stored_fingerprint = str(payload.get("fingerprint", ""))
+        except (json.JSONDecodeError, OSError):
+            stored_fingerprint = ""
+
+    if stored_fingerprint == current_fingerprint:
+        return
+
+    for filename in ("income_rules.csv", "expense_rules.csv"):
+        bundled_path = CONFIG_DIR / filename
+        user_path = USER_CONFIG_DIR / filename
+        if bundled_path.exists():
+            shutil.copyfile(bundled_path, user_path)
+
+    BUNDLED_RULES_STATE_FILE.write_text(
+        json.dumps({"fingerprint": current_fingerprint}, indent=2),
+        encoding="utf-8",
+    )
+
+
 def ensure_user_rule_file(filename: str) -> Path:
+    sync_bundled_rules_if_updated()
     USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     user_path = USER_CONFIG_DIR / filename
     if user_path.exists():
@@ -621,6 +663,36 @@ class ChartCanvas(tk.Canvas):
             self._bind_hover(expense_tag, f"{label}\nExpenses: {currency(expense_value)}")
             self.create_text(center_x, bottom + 14, text=label, fill=TEXT_PRIMARY, font=("Helvetica", 9))
 
+
+def classify_income_subgroup(category: str, description: str) -> str:
+    text = (description or "").lower()
+    if category == "trips":
+        if "car fee" in text:
+            return "1. Car fee"
+        return "2. Other trips"
+    if category == "courses":
+        if "pool session" in text:
+            return "1. Pool session"
+        if any(token in text for token in ["advanced", "aow", "rescue"]):
+            return "2. Advanced / AOW / Rescue"
+        return "3. Other courses"
+    if category == "gear hire":
+        if "gear deposit" in text:
+            return "1. Gear deposit"
+        if any(token in text for token in ["1 year full gear", "1/2 year full gear", "1/2 year full gear", "half year full gear"]):
+            return "2. 1 year + 1/2 year gear hire"
+        return "3. Other gear hire"
+    return "All items"
+
+
+def pretty_rule_label(pattern: str) -> str:
+    label = str(pattern)
+    label = label.replace("\\b", "")
+    label = label.replace("\\s*", " ")
+    label = label.replace("\\", "")
+    label = re.sub(r"\s+", " ", label).strip()
+    return label or pattern
+
 class FinanceAnalyzerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -771,14 +843,17 @@ class FinanceAnalyzerApp:
         notebook.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
 
         dashboard = ttk.Frame(notebook, padding=10)
+        income_summary = ttk.Frame(notebook, padding=10)
         transactions = ttk.Frame(notebook, padding=10)
         rules = ttk.Frame(notebook, padding=10)
 
         notebook.add(dashboard, text="Dashboard")
+        notebook.add(income_summary, text="Income Summary")
         notebook.add(transactions, text="Transactions")
         notebook.add(rules, text="Rule Tables")
 
         self.build_dashboard(dashboard)
+        self.build_income_summary(income_summary)
         self.build_transactions(transactions)
         self.build_rules(rules)
 
@@ -902,6 +977,31 @@ class FinanceAnalyzerApp:
         block.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0))
         ttk.Label(block, text=label, font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Label(block, textvariable=variable).grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+    def build_income_summary(self, parent: ttk.Frame) -> None:
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(1, weight=1)
+
+        info = ttk.LabelFrame(parent, text="Income Category Totals", padding=10)
+        info.grid(row=0, column=0, sticky="ew")
+        ttk.Label(
+            info,
+            text="Counts and totals follow the current filters. Trips and gear hire include extra subgroup breakdowns.",
+        ).grid(row=0, column=0, sticky="w")
+
+        self.income_summary_tree = ttk.Treeview(
+            parent,
+            columns=("category", "subgroup", "transactions", "total"),
+            show="headings",
+            height=22,
+        )
+        for name, width in (("category", 150), ("subgroup", 280), ("transactions", 120), ("total", 140)):
+            self.income_summary_tree.heading(name, text=name.title())
+            self.income_summary_tree.column(name, width=width, anchor="w" if name not in ("transactions", "total") else "e")
+        self.income_summary_tree.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
+        scroll = ttk.Scrollbar(parent, orient="vertical", command=self.income_summary_tree.yview)
+        self.income_summary_tree.configure(yscrollcommand=scroll.set)
+        scroll.grid(row=1, column=1, sticky="ns", pady=(10, 0))
 
     def build_transactions(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(0, weight=1)
@@ -1078,6 +1178,7 @@ class FinanceAnalyzerApp:
         self.misc_var.set(f"Misc review items: {misc_count}")
 
         self.refresh_breakdown()
+        self.refresh_income_summary()
         self.refresh_monthly_chart()
         self.refresh_transactions()
 
@@ -1132,6 +1233,67 @@ class FinanceAnalyzerApp:
         else:
             title = "Monthly Income vs Expenses (All Categories)"
         self.monthly_chart.draw_monthly_bars(income_monthly, expense_monthly, title)
+
+    def refresh_income_summary(self) -> None:
+        self.income_summary_tree.delete(*self.income_summary_tree.get_children())
+        if self.filtered_income.empty:
+            return
+
+        income_rules = load_rule_table(self.income_rules_path, INCOME_CATEGORIES)
+        membership_patterns = [value.strip() for value in income_rules["memberships"].tolist() if str(value).strip()]
+        compiled_membership_patterns: list[tuple[str, re.Pattern[str]]] = []
+        for pattern in membership_patterns:
+            try:
+                compiled_membership_patterns.append((pattern, re.compile(pattern, re.IGNORECASE)))
+            except re.error:
+                continue
+
+        grouped = self.filtered_income.groupby("category", dropna=False)
+        for category, frame in grouped:
+            total = float(frame["amount"].sum())
+            count = int(len(frame))
+            self.income_summary_tree.insert(
+                "",
+                "end",
+                values=(category, "All items", count, currency(total)),
+            )
+
+            if category == "memberships":
+                for pattern, compiled in compiled_membership_patterns:
+                    subframe = frame[frame["description"].fillna("").map(lambda value, rx=compiled: bool(rx.search(value)))]
+                    if subframe.empty:
+                        continue
+                    self.income_summary_tree.insert(
+                        "",
+                        "end",
+                        values=(
+                            "",
+                            pretty_rule_label(pattern),
+                            int(len(subframe)),
+                            currency(float(subframe["amount"].sum())),
+                        ),
+                    )
+                continue
+
+            if category not in {"trips", "gear hire", "courses"}:
+                continue
+
+            subgroup_frame = frame.copy()
+            subgroup_frame["subgroup"] = subgroup_frame["description"].map(
+                lambda value, cat=category: classify_income_subgroup(cat, value)
+            )
+            subgroup_grouped = subgroup_frame.groupby("subgroup", dropna=False)
+            for subgroup, subframe in subgroup_grouped:
+                self.income_summary_tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        "",
+                        subgroup,
+                        int(len(subframe)),
+                        currency(float(subframe["amount"].sum())),
+                    ),
+                )
 
     def refresh_transactions(self) -> None:
         self.transaction_tree.delete(*self.transaction_tree.get_children())

@@ -17,6 +17,9 @@ RULE_FILES = ("income_rules.csv", "expense_rules.csv")
 
 
 def sync_current_rules() -> None:
+    if sys.platform.startswith("win"):
+        # On Windows builds, trust the project config already synced from the Mac app.
+        return
     PROJECT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     for filename in RULE_FILES:
         user_path = USER_CONFIG_DIR / filename
@@ -76,33 +79,38 @@ def find_artifact(dist_dir: Path) -> Path:
 
 
 def build_with_pyinstaller() -> None:
-    data_separator = ";" if sys.platform.startswith("win") else ":"
+    is_windows = sys.platform.startswith("win")
+    data_separator = ";" if is_windows else ":"
     dist_dir, work_dir, spec_dir = clean_local_build_dirs()
     stage_dir = prepare_stage_dir()
     stage_config_dir = stage_dir / "config"
     stage_source_dir = stage_dir / "source"
+    pyinstaller_args = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--windowed",
+        "--name",
+        APP_NAME,
+        "--distpath",
+        str(dist_dir),
+        "--workpath",
+        str(work_dir),
+        "--specpath",
+        str(spec_dir),
+        "--add-data",
+        f"{stage_config_dir}{data_separator}config",
+        "--add-data",
+        f"{stage_source_dir}{data_separator}source",
+    ]
+    if is_windows:
+        # Avoid "failed to load python dll" when the .exe is moved without the onedir _internal folder.
+        pyinstaller_args.append("--onefile")
+    pyinstaller_args.append(APP_SCRIPT)
     subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            "--noconfirm",
-            "--clean",
-            "--windowed",
-            "--name",
-            APP_NAME,
-            "--distpath",
-            str(dist_dir),
-            "--workpath",
-            str(work_dir),
-            "--specpath",
-            str(spec_dir),
-            "--add-data",
-            f"{stage_config_dir}{data_separator}config",
-            "--add-data",
-            f"{stage_source_dir}{data_separator}source",
-            APP_SCRIPT,
-        ],
+        pyinstaller_args,
         cwd=stage_dir,
         check=True,
     )
