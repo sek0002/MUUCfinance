@@ -90,6 +90,7 @@ class AnalysisBundle:
 def default_file_paths() -> dict[str, str]:
     return {
         "stripe": str(RUNTIME_DIR / "source" / "stripe.csv"),
+        "teamapp": str(RUNTIME_DIR / "source" / "teamapp.csv"),
         "everyday": str(RUNTIME_DIR / "source" / "everyday.csv"),
     }
 
@@ -192,7 +193,6 @@ def match_category(text: str, compiled_rules: dict[str, list[re.Pattern[str]]], 
 
 def parse_stripe_income(
     stripe_path: Path,
-    rule_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw = pd.read_csv(stripe_path)
     df = raw.copy()
@@ -204,35 +204,45 @@ def parse_stripe_income(
     df["fee_amount"] = pd.to_numeric(df["Fee"], errors="coerce").fillna(0.0)
     df = df[~df["status_normalized"].isin({"failed", "requires_payment_method"})].copy()
 
-    refund_mask = df["status_normalized"].isin({"refunded", "refund"})
-    income_df = df[~refund_mask].copy()
-
-    compiled = compile_rule_map(rule_df, INCOME_CATEGORIES)
-    if income_df.empty:
-        income = pd.DataFrame(columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"])
-    else:
-        categories, matched = zip(*income_df["description"].map(lambda value: match_category(value, compiled, INCOME_CATEGORIES)))
-        income_df["category"] = list(categories)
-        income_df["matched"] = list(matched)
-        income = income_df[["date", "description", "category", "matched", "gross_amount", "refunded_amount", "id"]].rename(
-            columns={"gross_amount": "amount", "id": "reference"}
-        )
-        income["source"] = "stripe income"
-        income = income[["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"]]
-
     fee_expenses = df[df["fee_amount"] > 0][["date", "description", "fee_amount", "id"]].copy()
     fee_expenses["category"] = "fees"
     fee_expenses["matched"] = True
     fee_expenses["source"] = "stripe fee"
     fee_expenses.rename(columns={"fee_amount": "amount", "id": "reference"}, inplace=True)
-    refund_expenses = df[refund_mask & (df["refunded_amount"] > 0)][["date", "description", "refunded_amount", "id"]].copy()
-    refund_expenses["category"] = "refunds"
-    refund_expenses["matched"] = True
-    refund_expenses["source"] = "stripe refund"
-    refund_expenses.rename(columns={"refunded_amount": "amount", "id": "reference"}, inplace=True)
-    expenses = pd.concat([fee_expenses, refund_expenses], ignore_index=True, sort=False)
+    expenses = fee_expenses.copy()
     expenses = expenses[["date", "description", "category", "matched", "amount", "source", "reference"]]
+    income = pd.DataFrame(columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"])
     return income, expenses
+
+
+def parse_teamapp_income(
+    teamapp_path: Path,
+    rule_df: pd.DataFrame,
+) -> pd.DataFrame:
+    raw = pd.read_csv(teamapp_path)
+    df = raw.copy()
+    df["date"] = pd.to_datetime(df["date"], format="%Y-%b-%d", errors="coerce")
+    df["paid_normalized"] = df["paid"].fillna("").astype(str).str.strip().str.upper()
+    df = df[df["paid_normalized"] == "YES"].copy()
+    df["description"] = df["items"].fillna("")
+    df["amount"] = (
+        df["total"]
+        .fillna("")
+        .astype(str)
+        .str.replace("$", "", regex=False)
+        .str.replace(",", "", regex=False)
+    )
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+    compiled = compile_rule_map(rule_df, INCOME_CATEGORIES)
+    if df.empty:
+        return pd.DataFrame(columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"])
+    categories, matched = zip(*df["description"].map(lambda value: match_category(value, compiled, INCOME_CATEGORIES)))
+    df["category"] = list(categories)
+    df["matched"] = list(matched)
+    df["source"] = "teamapp income"
+    df["reference"] = df["purchase_id"].fillna("").astype(str)
+    df["refunded_amount"] = 0.0
+    return df[["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount"]]
 
 
 def parse_everyday_expenses(
@@ -261,13 +271,15 @@ def parse_everyday_expenses(
 
 def load_analysis(
     stripe_path: Path,
+    teamapp_path: Path,
     everyday_path: Path,
     income_rules_path: Path,
     expense_rules_path: Path,
 ) -> AnalysisBundle:
     income_rules = load_rule_table(income_rules_path, INCOME_CATEGORIES)
     expense_rules = load_rule_table(expense_rules_path, EXPENSE_CATEGORIES)
-    income, stripe_expenses = parse_stripe_income(stripe_path, income_rules)
+    _, stripe_expenses = parse_stripe_income(stripe_path)
+    income = parse_teamapp_income(teamapp_path, income_rules)
     everyday_expenses = parse_everyday_expenses(everyday_path, expense_rules)
     expenses = pd.concat([everyday_expenses, stripe_expenses], ignore_index=True, sort=False)
     misc_income = income[income["category"] == "misc"].copy()
@@ -371,6 +383,8 @@ def latest_entry_label(csv_key: str, csv_path: Path) -> str:
         df = pd.read_csv(csv_path)
         if csv_key == "stripe":
             dates = pd.to_datetime(df.get("Created date (UTC)"), errors="coerce")
+        elif csv_key == "teamapp":
+            dates = pd.to_datetime(df.get("date"), format="%Y-%b-%d", errors="coerce")
         elif csv_key == "everyday":
             dates = pd.to_datetime(df.get("Date"), format="%d %b %y", errors="coerce")
         else:
@@ -726,6 +740,7 @@ class FinanceAnalyzerApp:
         self.status_var = tk.StringVar(value="Load the source CSVs to begin.")
         self.transaction_view_var = tk.StringVar(value="All")
         self.stripe_latest_var = tk.StringVar(value=latest_entry_label("stripe", Path(self.settings["stripe"])))
+        self.teamapp_latest_var = tk.StringVar(value=latest_entry_label("teamapp", Path(self.settings["teamapp"])))
         self.everyday_latest_var = tk.StringVar(value=latest_entry_label("everyday", Path(self.settings["everyday"])))
 
         self.income_total_var = tk.StringVar(value="$0.00")
@@ -830,6 +845,18 @@ class FinanceAnalyzerApp:
         stripe_link.bind("<Button-1>", lambda _event: self.open_source_file("stripe"))
         stripe_meta = ttk.Label(links_frame, textvariable=self.stripe_latest_var)
         stripe_meta.grid(row=1, column=0, sticky="e")
+        teamapp_link = tk.Label(
+            links_frame,
+            text="Open TeamApp CSV",
+            fg="#7db7ff",
+            bg=BG_PANEL,
+            cursor="hand2",
+            font=("Helvetica", 10, "underline"),
+        )
+        teamapp_link.grid(row=0, column=1, sticky="e", padx=(12, 0))
+        teamapp_link.bind("<Button-1>", lambda _event: self.open_source_file("teamapp"))
+        teamapp_meta = ttk.Label(links_frame, textvariable=self.teamapp_latest_var)
+        teamapp_meta.grid(row=1, column=1, sticky="e", padx=(12, 0))
         everyday_link = tk.Label(
             links_frame,
             text="Open Everyday CSV",
@@ -838,10 +865,10 @@ class FinanceAnalyzerApp:
             cursor="hand2",
             font=("Helvetica", 10, "underline"),
         )
-        everyday_link.grid(row=0, column=1, sticky="e", padx=(12, 0))
+        everyday_link.grid(row=0, column=2, sticky="e", padx=(12, 0))
         everyday_link.bind("<Button-1>", lambda _event: self.open_source_file("everyday"))
         everyday_meta = ttk.Label(links_frame, textvariable=self.everyday_latest_var)
-        everyday_meta.grid(row=1, column=1, sticky="e", padx=(12, 0))
+        everyday_meta.grid(row=1, column=2, sticky="e", padx=(12, 0))
 
         notebook = ttk.Notebook(main)
         notebook.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
@@ -1074,9 +1101,11 @@ class FinanceAnalyzerApp:
     def load_data(self) -> None:
         try:
             self.stripe_latest_var.set(latest_entry_label("stripe", Path(self.settings["stripe"])))
+            self.teamapp_latest_var.set(latest_entry_label("teamapp", Path(self.settings["teamapp"])))
             self.everyday_latest_var.set(latest_entry_label("everyday", Path(self.settings["everyday"])))
             self.analysis = load_analysis(
                 Path(self.settings["stripe"]),
+                Path(self.settings["teamapp"]),
                 Path(self.settings["everyday"]),
                 self.income_rules_path,
                 self.expense_rules_path,
@@ -1334,6 +1363,7 @@ class FinanceAnalyzerApp:
 def print_cli_summary() -> None:
     bundle = load_analysis(
         Path(default_file_paths()["stripe"]),
+        Path(default_file_paths()["teamapp"]),
         Path(default_file_paths()["everyday"]),
         ensure_user_rule_file("income_rules.csv"),
         ensure_user_rule_file("expense_rules.csv"),
