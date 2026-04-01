@@ -22,7 +22,13 @@ RUNTIME_DIR = Path(getattr(sys, "_MEIPASS", str(BASE_DIR)))
 CONFIG_DIR = RUNTIME_DIR / "config"
 SETTINGS_DIR = Path.home() / ".muuc_finance_analyzer"
 USER_CONFIG_DIR = SETTINGS_DIR / "config"
+USER_SOURCE_DIR = SETTINGS_DIR / "source"
 BUNDLED_RULES_STATE_FILE = USER_CONFIG_DIR / "bundled_rules_state.json"
+SOURCE_FILENAMES = {
+    "stripe": "stripe.csv",
+    "teamapp": "teamapp.csv",
+    "everyday": "everyday.csv",
+}
 
 BG_PRIMARY = "#16181c"
 BG_PANEL = "#1f232a"
@@ -88,11 +94,18 @@ class AnalysisBundle:
 
 
 def default_file_paths() -> dict[str, str]:
-    return {
-        "stripe": str(RUNTIME_DIR / "source" / "stripe.csv"),
-        "teamapp": str(RUNTIME_DIR / "source" / "teamapp.csv"),
-        "everyday": str(RUNTIME_DIR / "source" / "everyday.csv"),
-    }
+    source_dir = USER_SOURCE_DIR
+    if BASE_DIR == RUNTIME_DIR:
+        source_dir = BASE_DIR / "source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    paths: dict[str, str] = {}
+    for key, filename in SOURCE_FILENAMES.items():
+        user_path = source_dir / filename
+        bundled_path = RUNTIME_DIR / "source" / filename
+        if not user_path.exists() and bundled_path.exists():
+            shutil.copyfile(bundled_path, user_path)
+        paths[key] = str(user_path if user_path.exists() else bundled_path)
+    return paths
 
 
 def bundled_rules_fingerprint() -> str:
@@ -268,6 +281,13 @@ def parse_everyday_expenses(
     raw = pd.read_csv(everyday_path)
     df = raw.copy()
     df["date"] = pd.to_datetime(df["Date"], format="%d %b %y", errors="coerce")
+    missing_dates = df["date"].isna()
+    if missing_dates.any():
+        df.loc[missing_dates, "date"] = pd.to_datetime(df.loc[missing_dates, "Date"], format="%d %B %y", errors="coerce")
+    missing_dates = df["date"].isna()
+    if missing_dates.any():
+        normalized_dates = df.loc[missing_dates, "Date"].astype(str).str.replace("Sept", "Sep", regex=False)
+        df.loc[missing_dates, "date"] = pd.to_datetime(normalized_dates, format="%d %b %y", errors="coerce")
     df["raw_amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
     # Everyday exports encode debits as negative values; only those rows are used.
     df = df[df["raw_amount"] < 0].copy()
@@ -863,6 +883,9 @@ class FinanceAnalyzerApp:
         stripe_link.bind("<Button-1>", lambda _event: self.open_source_file("stripe"))
         stripe_meta = ttk.Label(links_frame, textvariable=self.stripe_latest_var)
         stripe_meta.grid(row=1, column=0, sticky="e")
+        ttk.Button(links_frame, text="Update Stripe CSV", command=lambda: self.replace_source_file("stripe")).grid(
+            row=2, column=0, sticky="e", pady=(6, 0)
+        )
         teamapp_link = tk.Label(
             links_frame,
             text="Open TeamApp CSV",
@@ -875,6 +898,9 @@ class FinanceAnalyzerApp:
         teamapp_link.bind("<Button-1>", lambda _event: self.open_source_file("teamapp"))
         teamapp_meta = ttk.Label(links_frame, textvariable=self.teamapp_latest_var)
         teamapp_meta.grid(row=1, column=1, sticky="e", padx=(12, 0))
+        ttk.Button(links_frame, text="Update TeamApp CSV", command=lambda: self.replace_source_file("teamapp")).grid(
+            row=2, column=1, sticky="e", padx=(12, 0), pady=(6, 0)
+        )
         everyday_link = tk.Label(
             links_frame,
             text="Open Everyday CSV",
@@ -887,6 +913,9 @@ class FinanceAnalyzerApp:
         everyday_link.bind("<Button-1>", lambda _event: self.open_source_file("everyday"))
         everyday_meta = ttk.Label(links_frame, textvariable=self.everyday_latest_var)
         everyday_meta.grid(row=1, column=2, sticky="e", padx=(12, 0))
+        ttk.Button(links_frame, text="Update Everyday CSV", command=lambda: self.replace_source_file("everyday")).grid(
+            row=2, column=2, sticky="e", padx=(12, 0), pady=(6, 0)
+        )
 
         notebook = ttk.Notebook(main)
         notebook.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
@@ -1177,6 +1206,27 @@ class FinanceAnalyzerApp:
             messagebox.showerror(APP_NAME, f"File not found:\n{path}")
             return
         webbrowser.open(path.as_uri())
+
+    def replace_source_file(self, key: str) -> None:
+        selected_path = filedialog.askopenfilename(
+            title=f"Select {key.title()} CSV",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if not selected_path:
+            return
+
+        destination = Path(self.settings[key])
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copyfile(selected_path, destination)
+        except OSError as exc:
+            messagebox.showerror(APP_NAME, f"Failed to update {key} CSV:\n{exc}")
+            self.status_var.set(f"Failed to update {key} CSV.")
+            return
+
+        self.settings[key] = str(destination)
+        self.status_var.set(f"Updated {key} CSV. Reloading data.")
+        self.load_data()
 
     def on_period_change(self) -> None:
         current_mode = self.period_var.get()
