@@ -1,5 +1,8 @@
 # MUUC Finance Analyzer
 
+
+Monthly report and releases here: https://github.com/sek0002/MUUCfinance/releases
+
 Desktop app for categorising MUUC Stripe income and MUUC everyday-account expenses from the source CSV exports.
 
 ## What it does
