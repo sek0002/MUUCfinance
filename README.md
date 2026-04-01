@@ -64,3 +64,4 @@ python3 build_pyinstaller.py
 ```
 
 The build script first syncs your active saved rules from `~/.muuc_finance_analyzer/config/` into the project `config/`, then runs PyInstaller using local temporary build folders (to avoid Windows file-lock issues on shared/network paths) and prints the final packaged app location. The current `config/` and `source/` folders are bundled into the executable.
+# muuc_finance
