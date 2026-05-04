@@ -131,6 +131,20 @@ def current_rule_paths() -> tuple[Path, Path]:
     return ensure_web_rule_file("income_rules.csv"), ensure_web_rule_file("expense_rules.csv")
 
 
+def empty_bundle() -> AnalysisBundle:
+    return AnalysisBundle(
+        income=pd.DataFrame(),
+        expenses=pd.DataFrame(),
+        misc_income=pd.DataFrame(),
+        misc_expenses=pd.DataFrame(),
+    )
+
+
+def missing_source_keys() -> list[str]:
+    paths = current_source_paths()
+    return [key for key in SOURCE_KEYS if not paths[key].exists()]
+
+
 def load_bundle() -> AnalysisBundle:
     source_paths = current_source_paths()
     income_rules_path, expense_rules_path = current_rule_paths()
@@ -141,6 +155,37 @@ def load_bundle() -> AnalysisBundle:
         income_rules_path,
         expense_rules_path,
     )
+
+
+def load_bundle_safe() -> tuple[AnalysisBundle, list[str]]:
+    missing = missing_source_keys()
+    if missing:
+        return empty_bundle(), missing
+    try:
+        return load_bundle(), []
+    except FileNotFoundError:
+        return empty_bundle(), missing_source_keys()
+
+
+def merge_csv_bytes(existing_path: Path, uploaded_bytes: bytes) -> tuple[int, int]:
+    uploaded_df = pd.read_csv(io.BytesIO(uploaded_bytes))
+    if not existing_path.exists():
+        existing_path.parent.mkdir(parents=True, exist_ok=True)
+        uploaded_df.to_csv(existing_path, index=False)
+        return len(uploaded_df.index), 0
+
+    existing_df = pd.read_csv(existing_path)
+    all_columns = list(dict.fromkeys(list(existing_df.columns) + list(uploaded_df.columns)))
+    existing_aligned = existing_df.reindex(columns=all_columns)
+    uploaded_aligned = uploaded_df.reindex(columns=all_columns)
+    combined = pd.concat([existing_aligned, uploaded_aligned], ignore_index=True, sort=False)
+    dedupe_keys = combined.fillna("").astype(str)
+    unique_mask = ~dedupe_keys.duplicated(keep="first")
+    merged = combined.loc[unique_mask].copy()
+    added_rows = int(len(merged.index) - len(existing_aligned.index))
+    skipped_rows = int(len(uploaded_aligned.index) - added_rows)
+    merged.to_csv(existing_path, index=False)
+    return added_rows, skipped_rows
 
 
 def require_auth(request: Request) -> Optional[RedirectResponse]:
@@ -269,6 +314,7 @@ def source_rows() -> list[dict[str, str]]:
             "key": key,
             "label": labels[key],
             "path": str(paths[key]),
+            "exists": "1" if paths[key].exists() else "",
             "latest": latest_entry_label(key, paths[key]),
         }
         for key in SOURCE_KEYS
@@ -326,7 +372,7 @@ def dashboard_context(
     transaction_view: str,
     message: Optional[str],
 ) -> dict[str, Any]:
-    bundle = load_bundle()
+    bundle, missing_sources = load_bundle_safe()
     active_categories = requested_categories(categories)
     start, end = period_range(period, start_text, end_text, selected_year)
 
@@ -365,6 +411,8 @@ def dashboard_context(
         "transaction_view": transaction_view,
         "transaction_views": ["All", "Income", "Expenses", "Income Misc", "Expense Misc"],
         "source_rows": source_rows(),
+        "missing_sources": missing_sources,
+        "show_upload_prompt": bool(missing_sources),
         "rule_rows": rule_rows(),
         "income_total": currency(float(filtered_income["amount"].sum())) if not filtered_income.empty else currency(0.0),
         "expense_total": currency(float(filtered_expenses["amount"].sum())) if not filtered_expenses.empty else currency(0.0),
@@ -451,10 +499,15 @@ async def upload_source(request: Request, source_key: str, file: UploadFile) -> 
         return RedirectResponse(url="/dashboard?message=Please upload a CSV file.", status_code=303)
 
     destination = current_source_paths()[source_key]
-    destination.parent.mkdir(parents=True, exist_ok=True)
     contents = await file.read()
-    destination.write_bytes(contents)
-    return RedirectResponse(url=f"/dashboard?message=Updated {source_key} source file.", status_code=303)
+    try:
+        added_rows, skipped_rows = merge_csv_bytes(destination, contents)
+    except Exception as exc:
+        return RedirectResponse(url=f"/dashboard?message=Failed to merge uploaded CSV: {exc}", status_code=303)
+    return RedirectResponse(
+        url=f"/dashboard?message=Updated {source_key} source file. Added {added_rows} new rows, skipped {skipped_rows} overlapping rows.",
+        status_code=303,
+    )
 
 
 @app.get("/download/source/{source_key}")
@@ -527,7 +580,7 @@ def export_transactions(
     auth_redirect = require_auth(request)
     if auth_redirect:
         return auth_redirect
-    bundle = load_bundle()
+    bundle, _missing_sources = load_bundle_safe()
     active_categories = requested_categories(categories)
     start_date, end_date = period_range(period, start, end, selected_year)
     filtered_income = filter_frame(bundle.income, start_date, end_date)

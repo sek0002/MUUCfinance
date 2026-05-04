@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if show_upload_prompt %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>Upload Source CSVs</h2>
+  </div>
+  <p class="muted">
+    The app can start without source files. Upload the missing CSVs below to begin analysis.
+    Missing: {{ missing_sources | join(", ") }}.
+  </p>
+</section>
+{% endif %}
+
 <section class="panel">
   <form method="get" action="/dashboard" class="filters">
     <div class="field wide">
@@ -65,10 +77,12 @@
       <div class="muted">{{ source.latest }}</div>
     </div>
     <div class="source-actions">
+      {% if source.exists %}
       <a class="ghost-link" href="/download/source/{{ source.key }}">Download Current</a>
+      {% endif %}
       <form method="post" action="/upload/{{ source.key }}" enctype="multipart/form-data" class="upload-form">
         <input type="file" name="file" accept=".csv" required>
-        <button type="submit">Upload Replacement</button>
+        <button type="submit">{% if source.exists %}Upload Replacement{% else %}Upload CSV{% endif %}</button>
       </form>
     </div>
   </article>
