@@ -500,7 +500,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 36
+    margin_top = 24
     margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
@@ -565,9 +565,10 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
                 f'<text x="{(inset_x + inset_width / 2):.1f}" y="{inset_y + 12:.1f}" text-anchor="middle" class="year-inset-label">{html.escape(year)}</text>'
             )
 
-    legend_x = width - margin_right - (150 * len(active_series))
+    legend_slot = 280
+    legend_x = width - margin_right - (legend_slot * len(active_series))
     legend_x = max(legend_x, margin_left + 280)
-    legend_y = 22
+    legend_y = 28
     for idx, (series_name, series) in enumerate(active_series.items()):
         color = colors[idx % len(colors)]
         points = []
@@ -581,9 +582,9 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
         for x, y, value, label in points:
             tooltip = f"{series_name} | {label} | {currency(value)}"
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
-        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="5" fill="{color}" />')
-        parts.append(f'<text x="{legend_x + 12}" y="{legend_y + 4}" class="legend-label">{html.escape(series_name)}</text>')
-        legend_x += 150
+        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="8" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 20}" y="{legend_y + 8}" class="legend-label">{html.escape(series_name)}</text>')
+        legend_x += legend_slot
 
     parts.append("</svg>")
     return "".join(parts)
@@ -594,7 +595,7 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 36
+    margin_top = 24
     margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
@@ -659,9 +660,10 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
             parts.append(f'<rect x="{inset_x:.1f}" y="{inset_y:.1f}" width="{inset_width:.1f}" height="{inset_height}" rx="9" class="year-inset" />')
             parts.append(f'<text x="{(inset_x + inset_width / 2):.1f}" y="{inset_y + 12:.1f}" text-anchor="middle" class="year-inset-label">{html.escape(year)}</text>')
 
-    legend_x = width - margin_right - (150 * len(active_series))
+    legend_slot = 280
+    legend_x = width - margin_right - (legend_slot * len(active_series))
     legend_x = max(legend_x, margin_left + 280)
-    legend_y = 22
+    legend_y = 28
     for series_idx, (series_name, series) in enumerate(active_series.items()):
         color = colors[series_idx % len(colors)]
         for label_idx, label in enumerate(labels):
@@ -676,9 +678,9 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
             parts.append(
                 f'<rect x="{x:.1f}" y="{y:.1f}" width="{max(bar_width - 3, 6):.1f}" height="{max(bar_height, 1):.1f}" rx="4" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
             )
-        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="5" fill="{color}" />')
-        parts.append(f'<text x="{legend_x + 12}" y="{legend_y + 4}" class="legend-label">{html.escape(series_name)}</text>')
-        legend_x += 150
+        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="8" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 20}" y="{legend_y + 8}" class="legend-label">{html.escape(series_name)}</text>')
+        legend_x += legend_slot
 
     parts.append("</svg>")
     return "".join(parts)
@@ -689,7 +691,7 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 36
+    margin_top = 24
     margin_bottom = 108
     colors = {"Income": "#00a67e", "Expenses": "#db5b7b"}
     labels = list(dict.fromkeys(list(income_totals.index) + list(expense_totals.index)))
@@ -741,14 +743,15 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     add_series("Income", income_totals)
     add_series("Expenses", expense_totals)
 
-    legend_x = width - margin_right - 300
+    legend_slot = 280
+    legend_x = width - margin_right - (legend_slot * 2)
     legend_x = max(legend_x, margin_left + 280)
-    legend_y = 22
+    legend_y = 28
     for series_name in ["Income", "Expenses"]:
         color = colors[series_name]
-        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="5" fill="{color}" />')
-        parts.append(f'<text x="{legend_x + 12}" y="{legend_y + 4}" class="legend-label">{html.escape(series_name)}</text>')
-        legend_x += 150
+        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="8" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 20}" y="{legend_y + 8}" class="legend-label">{html.escape(series_name)}</text>')
+        legend_x += legend_slot
 
     parts.append("</svg>")
     return "".join(parts)
@@ -759,7 +762,7 @@ def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 36
+    margin_top = 24
     margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
@@ -808,16 +811,16 @@ def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.
     draw_stack(0, "Income", income_segments)
     draw_stack(1, "Expenses", expense_segments)
 
-    legend_x = width - margin_right - 180
+    legend_x = width - margin_right - 320
     legend_x = max(legend_x, margin_left + 280)
-    legend_y = 18
-    legend_step = 20
+    legend_y = 28
+    legend_step = 34
     legend_items = income_segments if income_segments else expense_segments
     for idx, (label, _value) in enumerate(legend_items):
         color = colors[idx % len(colors)]
         row_y = legend_y + (idx * legend_step)
-        parts.append(f'<rect x="{legend_x}" y="{row_y - 8}" width="10" height="10" rx="2" fill="{color}" />')
-        parts.append(f'<text x="{legend_x + 16}" y="{row_y + 1}" class="legend-label">{html.escape(label)}</text>')
+        parts.append(f'<rect x="{legend_x}" y="{row_y - 10}" width="14" height="14" rx="3" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 24}" y="{row_y + 6}" class="legend-label">{html.escape(label)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)
@@ -833,7 +836,7 @@ def build_time_stacked_category_bar_svg(
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 36
+    margin_top = 24
     margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
@@ -952,15 +955,15 @@ def build_time_stacked_category_bar_svg(
         parts.append(f'<text x="{income_x + (bar_width / 2):.1f}" y="{margin_top + plot_height - 6:.1f}" text-anchor="middle" class="axis-label">I</text>')
         parts.append(f'<text x="{expense_x + (bar_width / 2):.1f}" y="{margin_top + plot_height - 6:.1f}" text-anchor="middle" class="axis-label">E</text>')
 
-    legend_x = width - margin_right - 220
+    legend_x = width - margin_right - 320
     legend_x = max(legend_x, margin_left + 280)
-    legend_y = 18
-    legend_step = 18
+    legend_y = 28
+    legend_step = 34
     legend_items = [(category, color_map[category]) for category in category_order]
     for idx, (label, color) in enumerate(legend_items):
         row_y = legend_y + (idx * legend_step)
-        parts.append(f'<rect x="{legend_x}" y="{row_y - 8}" width="10" height="10" rx="2" fill="{color}" />')
-        parts.append(f'<text x="{legend_x + 16}" y="{row_y + 1}" class="legend-label">{html.escape(label)}</text>')
+        parts.append(f'<rect x="{legend_x}" y="{row_y - 10}" width="14" height="14" rx="3" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 24}" y="{row_y + 6}" class="legend-label">{html.escape(label)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)
@@ -1016,7 +1019,7 @@ def build_pie_svg(income_series: pd.Series, expense_series: pd.Series) -> str:
             tooltip = f"{title} | {category} | {currency(float(amount))}"
             y = legend_y + idx * 24
             parts.append(f'<rect x="{legend_x}" y="{y}" width="12" height="12" rx="3" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
-            parts.append(f'<text x="{legend_x + 18}" y="{y + 10}" class="legend-label">{html.escape(category)} {html.escape(currency(float(amount)))}</text>')
+            parts.append(f'<text x="{legend_x + 18}" y="{y + 10}" class="legend-label pie-legend-label">{html.escape(category)} {html.escape(currency(float(amount)))}</text>')
     parts.append("</svg>")
     return "".join(parts)
 

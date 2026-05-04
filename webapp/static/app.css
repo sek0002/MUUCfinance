@@ -684,14 +684,14 @@ button {
   border-radius: 18px;
   background: color-mix(in srgb, var(--panel-soft) 70%, var(--panel) 30%);
   border: 1px solid var(--line);
-  padding: 6px 8px 8px;
+  padding: 12px 18px 14px;
   min-height: 520px;
   display: flex;
   align-items: stretch;
 }
 
 .chart-frame.has-detail {
-  padding: 10px;
+  padding: 14px 18px;
 }
 
 .chart-layout {
@@ -782,6 +782,10 @@ button {
 .grid-line { stroke: color-mix(in srgb, var(--line) 56%, white 44%); stroke-width: 1; }
 .axis-label,
 .legend-label { fill: var(--muted); font-size: 26px; }
+
+.pie-legend-label {
+  font-size: 13px;
+}
 .year-inset {
   fill: color-mix(in srgb, var(--panel-soft) 76%, var(--panel) 24%);
   stroke: var(--line);
