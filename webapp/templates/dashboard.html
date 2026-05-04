@@ -112,6 +112,7 @@
         </div>
         {% endif %}
 
+        {% if graph_mode != 'pie' %}
         <div class="window-control">
           <label>Window</label>
           <input type="hidden" id="window_scale" name="window_scale" value="{{ window_scale }}">
@@ -122,6 +123,9 @@
             <button type="button" class="window-toggle-option{% if window_scale == 3 %} active{% endif %}" data-window-scale="3">Year</button>
           </div>
         </div>
+        {% else %}
+        <input type="hidden" id="window_scale" name="window_scale" value="{{ window_scale }}">
+        {% endif %}
 
         {% if graph_mode == 'category' %}
         <div class="pie-filter-menu">

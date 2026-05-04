@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlencode
@@ -67,6 +67,8 @@ PERIOD_OPTIONS = [
 ]
 PURCHASE_PREFIX_RE = re.compile(r"^MUUC\s+(?:Ticketing\s+)?Purchase\s+Id:\s*\d+\s*-\s*", flags=re.IGNORECASE)
 DEMO_PIN = "6882"
+DEFAULT_DASHBOARD_END = date.today()
+DEFAULT_DASHBOARD_START = DEFAULT_DASHBOARD_END - timedelta(days=365)
 
 app = FastAPI(title=f"{APP_NAME} Web")
 app.add_middleware(
@@ -495,11 +497,11 @@ def svg_tooltip_script() -> str:
 
 def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
     width = 1160
-    height = 500
-    margin_left = 64
-    margin_right = 32
-    margin_top = 42
-    margin_bottom = 84
+    height = 620
+    margin_left = 92
+    margin_right = 44
+    margin_top = 52
+    margin_bottom = 128
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -517,7 +519,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
     plot_height = height - margin_top - margin_bottom
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -589,11 +591,11 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
 
 def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
     width = 1160
-    height = 500
-    margin_left = 64
-    margin_right = 32
-    margin_top = 42
-    margin_bottom = 84
+    height = 620
+    margin_left = 92
+    margin_right = 44
+    margin_top = 52
+    margin_bottom = 128
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -615,7 +617,7 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
     bar_width = max(inner_width / series_count, 10)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -684,11 +686,11 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
 
 def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_totals: pd.Series, title: str) -> str:
     width = 1160
-    height = 500
-    margin_left = 64
-    margin_right = 32
-    margin_top = 42
-    margin_bottom = 84
+    height = 620
+    margin_left = 92
+    margin_right = 44
+    margin_top = 52
+    margin_bottom = 128
     colors = {"Income": "#00a67e", "Expenses": "#db5b7b"}
     labels = list(dict.fromkeys(list(income_totals.index) + list(expense_totals.index)))
     if not labels:
@@ -704,7 +706,7 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     x_step = plot_width / max(len(labels) - 1, 1)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -754,11 +756,11 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
 
 def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.Series, title: str) -> str:
     width = 1160
-    height = 500
-    margin_left = 64
-    margin_right = 32
-    margin_top = 42
-    margin_bottom = 84
+    height = 620
+    margin_left = 92
+    margin_right = 44
+    margin_top = 52
+    margin_bottom = 128
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
     income_segments = [(label, float(income_totals.get(label, 0.0))) for label in income_totals.index.tolist() if float(income_totals.get(label, 0.0)) > 0]
@@ -776,7 +778,7 @@ def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.
     bar_width = min(group_width * 0.4, 120)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -828,11 +830,11 @@ def build_time_stacked_category_bar_svg(
     window_key: str,
 ) -> str:
     width = 1160
-    height = 500
-    margin_left = 64
-    margin_right = 32
-    margin_top = 42
-    margin_bottom = 84
+    height = 620
+    margin_left = 92
+    margin_right = 44
+    margin_top = 52
+    margin_bottom = 128
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
     labels = []
@@ -858,7 +860,7 @@ def build_time_stacked_category_bar_svg(
     pair_gap = min(group_width * 0.1, 10)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -1294,7 +1296,16 @@ def dashboard_context(
         if chart_style_value == "bar":
             chart_svg = build_time_stacked_category_bar_svg(income_series_map, expense_series_map, chart_title, window_key)
         else:
-            category_series = {**income_series_map, **expense_series_map}
+            combined_income = pd.Series(dtype="float64")
+            combined_expenses = pd.Series(dtype="float64")
+            for series in income_series_map.values():
+                combined_income = combined_income.add(series, fill_value=0.0)
+            for series in expense_series_map.values():
+                combined_expenses = combined_expenses.add(series, fill_value=0.0)
+            category_series = {
+                "Income": combined_income.sort_index(),
+                "Expenses": combined_expenses.sort_index(),
+            }
             chart_svg = build_line_chart_svg(category_series, chart_title, window_key)
         chart_detail_title = "Line Items"
         chart_detail_columns = [
@@ -1458,9 +1469,9 @@ def logout(request: Request) -> RedirectResponse:
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(
     request: Request,
-    period: str = Query("All Dates"),
-    start: str = Query(""),
-    end: str = Query(""),
+    period: str = Query("Custom"),
+    start: str = Query(DEFAULT_DASHBOARD_START.isoformat()),
+    end: str = Query(DEFAULT_DASHBOARD_END.isoformat()),
     selected_year: int = Query(date.today().year),
     graph_mode: str = Query("totals"),
     chart_style: str = Query("line"),
