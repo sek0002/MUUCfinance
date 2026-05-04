@@ -1097,3 +1097,325 @@ td.amount { text-align: right; white-space: nowrap; }
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 760px) {
+  .shell {
+    width: calc(100vw - 12px);
+    padding: 8px 0 16px;
+  }
+
+  .shell-login {
+    width: calc(100vw - 12px);
+    padding: 16px 0;
+  }
+
+  .panel {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .topbar {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .brand-block {
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 44px;
+    height: 44px;
+  }
+
+  .brand-block h1 {
+    font-size: 1.1rem;
+  }
+
+  .eyebrow {
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .menu-dropdown,
+  .menu-trigger {
+    width: 100%;
+  }
+
+  .menu-panel {
+    min-width: 0;
+    width: min(280px, calc(100vw - 24px));
+    left: 0;
+    right: auto;
+  }
+
+  .source-pill-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .source-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .field-row,
+  .field-row.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-controls {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .toggle-control,
+  .window-control,
+  .period-control,
+  .category-select,
+  .pie-filter-menu {
+    gap: 5px;
+  }
+
+  .mode-toggle-option,
+  .plot-toggle-option {
+    padding: 7px 8px;
+    font-size: 0.84rem;
+  }
+
+  .window-toggle-option {
+    padding: 7px 4px;
+    font-size: 0.8rem;
+  }
+
+  .filter-menu-dropdown summary {
+    font-size: 0.88rem;
+  }
+
+  .pie-filter-grid {
+    width: min(calc(100vw - 36px), 420px);
+  }
+
+  .chart-title-inline h3 {
+    font-size: 0.98rem;
+  }
+
+  .chart-title-inline span {
+    font-size: 0.78rem;
+  }
+
+  .chart-frame {
+    min-height: 420px;
+    padding: 10px 12px 12px;
+  }
+
+  .chart-frame.has-detail {
+    padding: 10px 12px 12px;
+  }
+
+  .chart-layout {
+    gap: 10px;
+  }
+
+  .chart-detail-panel {
+    padding-top: 10px;
+  }
+
+  .chart-detail-wrap,
+  .table-wrap {
+    max-height: 320px;
+  }
+
+  .chart-detail-table,
+  table {
+    font-size: 0.84rem;
+  }
+
+  th,
+  td {
+    padding: 8px 9px;
+  }
+
+  .summary-item {
+    padding: 10px 12px;
+  }
+
+  .summary-item strong {
+    font-size: 1.18rem;
+  }
+
+  .preview-table-wrap {
+    max-height: 180px;
+  }
+
+  .preview-table {
+    font-size: 0.76rem;
+  }
+
+  .rules-table-wrap {
+    max-height: 420px;
+  }
+
+  .rules-edit-table input {
+    min-width: 88px;
+    padding: 6px 7px;
+  }
+
+  .login-panel {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .login-panel h2 {
+    font-size: 1.18rem;
+  }
+
+  .stacked-login-form {
+    width: 100%;
+  }
+
+  .login-minimal-form {
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .login-minimal-form input {
+    padding: 14px 16px;
+    font-size: 1.05rem;
+  }
+
+  .login-minimal-form button {
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 560px) {
+  .shell {
+    width: calc(100vw - 8px);
+    padding: 6px 0 12px;
+  }
+
+  .shell-login {
+    width: calc(100vw - 8px);
+    padding: 12px 0;
+  }
+
+  .panel {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .brand-block {
+    align-items: flex-start;
+  }
+
+  .brand-copy {
+    gap: 2px;
+  }
+
+  .brand-block h1 {
+    font-size: 1rem;
+  }
+
+  .source-pill {
+    gap: 6px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .summary-stack {
+    gap: 8px;
+  }
+
+  .summary-item span {
+    font-size: 0.8rem;
+  }
+
+  .summary-item strong {
+    font-size: 1.08rem;
+  }
+
+  .mode-toggle-option,
+  .plot-toggle-option,
+  .window-toggle-option {
+    font-size: 0.76rem;
+  }
+
+  .mode-toggle-option,
+  .plot-toggle-option {
+    padding: 7px 6px;
+  }
+
+  .window-toggle-option {
+    padding: 7px 2px;
+  }
+
+  .chart-frame {
+    min-height: 360px;
+    padding: 8px 10px 10px;
+  }
+
+  .chart-frame.has-detail {
+    padding: 8px 10px 10px;
+  }
+
+  .pie-svg {
+    min-height: 420px;
+  }
+
+  .source-card {
+    padding: 10px;
+  }
+
+  .source-meta-row {
+    gap: 6px;
+  }
+
+  .preview-card {
+    padding: 6px;
+  }
+
+  .preview-table-wrap {
+    max-height: 160px;
+  }
+
+  .chart-detail-wrap,
+  .table-wrap {
+    max-height: 280px;
+  }
+
+  .login-shell {
+    gap: 14px;
+  }
+
+  .login-panel {
+    padding: 16px;
+  }
+
+  .login-panel h2 {
+    font-size: 1.08rem;
+  }
+
+  .login-minimal-form {
+    padding: 10px;
+    border-radius: 18px;
+  }
+
+  .login-minimal-form input {
+    padding: 12px 14px;
+    font-size: 0.98rem;
+    letter-spacing: 0.16em;
+  }
+
+  .login-minimal-form input::placeholder {
+    font-size: 0.76em;
+  }
+}

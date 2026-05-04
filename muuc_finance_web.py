@@ -466,6 +466,19 @@ def format_axis_tick_label(bucket: str, window_key: str) -> str:
     return str(bucket)
 
 
+def visible_axis_tick_labels(labels: list[str], window_key: str) -> list[str]:
+    visible_labels: list[str] = []
+    last_display_label = None
+    for bucket in labels:
+        display_label = format_axis_tick_label(bucket, window_key)
+        if display_label == last_display_label:
+            visible_labels.append("")
+        else:
+            visible_labels.append(display_label)
+            last_display_label = display_label
+    return visible_labels
+
+
 def bucket_year_label(bucket: str, window_key: str) -> str:
     try:
         if window_key == "day":
@@ -526,6 +539,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
             if label not in labels:
                 labels.append(label)
     labels = sorted(labels)
+    visible_tick_labels = visible_axis_tick_labels(labels, window_key)
     max_value = max(float(series.max()) for series in active_series.values()) if active_series else 1.0
     max_value = max(max_value, 1.0)
     plot_width = width - margin_left - margin_right
@@ -545,9 +559,10 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
         parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
 
     x_step = plot_width / max(len(labels) - 1, 1)
-    for index, label in enumerate(labels):
+    for index, display_label in enumerate(visible_tick_labels):
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
-        display_label = format_axis_tick_label(label, window_key)
+        if not display_label:
+            continue
         parts.append(
             f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
@@ -621,6 +636,7 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
             if label not in labels:
                 labels.append(label)
     labels = sorted(labels)
+    visible_tick_labels = visible_axis_tick_labels(labels, window_key)
     max_value = max(float(series.max()) for series in active_series.values()) if active_series else 1.0
     max_value = max(max_value, 1.0)
     plot_width = width - margin_left - margin_right
@@ -643,10 +659,11 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
         parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
         parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
 
-    for index, label in enumerate(labels):
+    for index, display_label in enumerate(visible_tick_labels):
         group_start = margin_left + (index * group_width)
         center_x = group_start + group_width / 2
-        display_label = format_axis_tick_label(label, window_key)
+        if not display_label:
+            continue
         parts.append(
             f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
@@ -710,6 +727,7 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     labels = list(dict.fromkeys(list(income_totals.index) + list(expense_totals.index)))
     if not labels:
         return '<div class="chart-empty">No data in the selected range.</div>'
+    visible_tick_labels = visible_axis_tick_labels(labels, "year")
 
     max_value = max(
         float(income_totals.max()) if not income_totals.empty else 0.0,
@@ -747,9 +765,10 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
             tooltip = f"{series_name} | {label} | {currency(value)}"
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
 
-    for index, label in enumerate(labels):
+    for index, display_label in enumerate(visible_tick_labels):
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
-        display_label = format_axis_tick_label(label, "year")
+        if not display_label:
+            continue
         parts.append(
             f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
@@ -862,6 +881,7 @@ def build_time_stacked_category_bar_svg(
     labels = sorted(labels)
     if not labels:
         return '<div class="chart-empty">No data in the selected range.</div>'
+    visible_tick_labels = visible_axis_tick_labels(labels, window_key)
 
     income_totals = {label: sum(float(series.get(label, 0.0)) for series in income_series_map.values()) for label in labels}
     expense_totals = {label: sum(float(series.get(label, 0.0)) for series in expense_series_map.values()) for label in labels}
@@ -889,10 +909,11 @@ def build_time_stacked_category_bar_svg(
         parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
         parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
 
-    for index, label in enumerate(labels):
+    for index, display_label in enumerate(visible_tick_labels):
         group_start = margin_left + (index * group_width)
         center_x = group_start + group_width / 2
-        display_label = format_axis_tick_label(label, window_key)
+        if not display_label:
+            continue
         parts.append(
             f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
