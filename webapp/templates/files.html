@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="files-layout">
+  <article class="panel">
+    <div class="panel-head tight">
+      <h2>Source CSVs</h2>
+    </div>
+    <div class="source-grid files-grid">
+      {% for source in source_rows %}
+      <article class="source-card">
+        <div>
+          <div class="eyebrow">{{ source.label }}</div>
+          <div class="source-path">{{ source.path }}</div>
+          <div class="muted">
+            {% if source.exists %}{{ source.latest }}{% else %}Not uploaded yet{% endif %}
+          </div>
+        </div>
+        <div class="source-actions">
+          {% if source.exists %}
+          <a class="ghost-link" href="/download/source/{{ source.key }}">Download Current</a>
+          {% endif %}
+          <form method="post" action="/upload/{{ source.key }}" enctype="multipart/form-data" class="upload-form">
+            <input type="file" name="file" accept=".csv" required>
+            <button type="submit">{% if source.exists %}Append Upload{% else %}Upload CSV{% endif %}</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-head tight">
+      <h2>Rule Tables</h2>
+    </div>
+    <div class="source-grid files-grid">
+      {% for rule in rule_rows %}
+      <article class="source-card">
+        <div>
+          <div class="eyebrow">{{ rule.label }}</div>
+          <div class="source-path">{{ rule.path }}</div>
+          <div class="muted">{{ rule.rows }} rows</div>
+        </div>
+        <div class="source-actions">
+          <a class="ghost-link" href="/download/rules/{{ rule.key }}">Download Current</a>
+          <form method="post" action="/upload/rules/{{ rule.key }}" enctype="multipart/form-data" class="upload-form">
+            <input type="file" name="file" accept=".csv" required>
+            <button type="submit">Upload Replacement</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

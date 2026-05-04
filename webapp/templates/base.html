@@ -10,18 +10,21 @@
   <div class="shell{% if login_page %} shell-login{% endif %}">
     {% if not login_page %}
     <header class="topbar">
-      <div>
+      <div class="brand-block">
         <div class="eyebrow">MUUC Finance</div>
         <h1>{{ app_name }}</h1>
       </div>
-      {% if request.session.get("authenticated") %}
       <div class="topbar-actions">
-        <a class="ghost-link" href="/auth/setup">Authenticator Setup</a>
+        <nav class="topnav">
+          <a class="nav-pill{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
+          <a class="nav-pill{% if active_page == 'files' %} active{% endif %}" href="/files">Files</a>
+        </nav>
+        {% if request.session.get("authenticated") %}
         <form method="post" action="/logout">
           <button type="submit" class="ghost-button">Sign Out</button>
         </form>
+        {% endif %}
       </div>
-      {% endif %}
     </header>
 
     {% if auth_error %}

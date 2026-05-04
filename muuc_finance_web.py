@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import io
 import os
 import re
@@ -12,8 +11,6 @@ from urllib.parse import urlencode
 
 import pandas as pd
 import pyotp
-import qrcode
-import qrcode.image.svg
 import uvicorn
 from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -205,6 +202,45 @@ def requested_categories(categories: list[str]) -> list[str]:
     return [category for category in categories if category in allowed]
 
 
+def dashboard_base_params(
+    period: str,
+    start_text: str,
+    end_text: str,
+    selected_year: int,
+    transaction_view: str,
+) -> list[tuple[str, str]]:
+    return [
+        ("period", period),
+        ("start", start_text),
+        ("end", end_text),
+        ("selected_year", str(selected_year)),
+        ("transaction_view", transaction_view),
+    ]
+
+
+def dashboard_url(
+    period: str,
+    start_text: str,
+    end_text: str,
+    selected_year: int,
+    transaction_view: str,
+    income_focus: str,
+    expense_focus: str,
+    monthly_focus: str,
+    review_focus: str,
+) -> str:
+    params = dashboard_base_params(period, start_text, end_text, selected_year, transaction_view)
+    params.extend(
+        [
+            ("income_focus", income_focus),
+            ("expense_focus", expense_focus),
+            ("monthly_focus", monthly_focus),
+            ("review_focus", review_focus),
+        ]
+    )
+    return f"/dashboard?{urlencode(params)}"
+
+
 def strip_purchase_prefix(value: str) -> str:
     return PURCHASE_PREFIX_RE.sub("", value or "")
 
@@ -229,6 +265,12 @@ def frame_for_view(
     if "date" in combined.columns:
         return combined.sort_values("date")
     return combined
+
+
+def apply_focus(frame: pd.DataFrame, category: str) -> pd.DataFrame:
+    if frame.empty or not category or category == "all" or "category" not in frame.columns:
+        return frame.copy()
+    return frame[frame["category"] == category].copy()
 
 
 def category_rows(series: pd.Series) -> list[dict[str, Any]]:
@@ -358,82 +400,116 @@ def base_template_context(request: Request) -> dict[str, Any]:
     }
 
 
-def otpauth_uri() -> str:
-    cfg = auth_config()
-    return pyotp.TOTP(cfg["totp_secret"]).provisioning_uri(name=cfg["username"], issuer_name=cfg["issuer"])
-
-
-def otpauth_qr_svg_data_uri() -> str:
-    image = qrcode.make(otpauth_uri(), image_factory=qrcode.image.svg.SvgPathImage)
-    buffer = io.BytesIO()
-    image.save(buffer)
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:image/svg+xml;base64,{encoded}"
-
-
 def dashboard_context(
     request: Request,
     period: str,
     start_text: str,
     end_text: str,
     selected_year: int,
-    categories: list[str],
     transaction_view: str,
+    income_focus: str,
+    expense_focus: str,
+    monthly_focus: str,
+    review_focus: str,
     message: Optional[str],
 ) -> dict[str, Any]:
     bundle, missing_sources = load_bundle_safe()
-    active_categories = requested_categories(categories)
     start, end = period_range(period, start_text, end_text, selected_year)
 
     filtered_income = filter_frame(bundle.income, start, end)
     filtered_expenses = filter_frame(bundle.expenses, start, end)
-    if active_categories:
-        filtered_income = filtered_income[filtered_income["category"].isin(active_categories)]
-        filtered_expenses = filtered_expenses[filtered_expenses["category"].isin(active_categories)]
+    income_focus_value = income_focus if income_focus in INCOME_CATEGORIES else "all"
+    expense_focus_value = expense_focus if expense_focus in EXPENSE_CATEGORIES else "all"
+    monthly_focus_value = monthly_focus if monthly_focus in dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES) else "all"
+    review_focus_value = review_focus if review_focus in dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES) else "all"
 
-    income_summary = summarize_categories(filtered_income, INCOME_CATEGORIES, [c for c in active_categories if c in INCOME_CATEGORIES])
-    expense_summary = summarize_categories(filtered_expenses, EXPENSE_CATEGORIES, [c for c in active_categories if c in EXPENSE_CATEGORIES])
-    transaction_frame = frame_for_view(bundle, filtered_income, filtered_expenses, transaction_view, start, end)
+    income_chart_frame = apply_focus(filtered_income, income_focus_value)
+    expense_chart_frame = apply_focus(filtered_expenses, expense_focus_value)
+    monthly_income_frame = apply_focus(filtered_income, monthly_focus_value if monthly_focus_value in INCOME_CATEGORIES else "all")
+    monthly_expense_frame = apply_focus(filtered_expenses, monthly_focus_value if monthly_focus_value in EXPENSE_CATEGORIES else "all")
+    income_table_frame = apply_focus(filtered_income, review_focus_value if review_focus_value in INCOME_CATEGORIES else "all")
+    expense_table_frame = apply_focus(filtered_expenses, review_focus_value if review_focus_value in EXPENSE_CATEGORIES else "all")
 
-    all_query = urlencode(
-        [
-            ("period", period),
-            ("start", start_text),
-            ("end", end_text),
-            ("selected_year", str(selected_year)),
-            ("transaction_view", transaction_view),
-            *[("categories", category) for category in active_categories],
-        ]
+    income_summary = summarize_categories(income_chart_frame, INCOME_CATEGORIES, [])
+    expense_summary = summarize_categories(expense_chart_frame, EXPENSE_CATEGORIES, [])
+    transaction_frame = frame_for_view(bundle, income_table_frame, expense_table_frame, transaction_view, start, end)
+    export_query = urlencode(
+        dashboard_base_params(period, start_text, end_text, selected_year, transaction_view)
+        + [("review_focus", review_focus_value)]
     )
+    combined_categories = list(dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES))
 
     return {
         **base_template_context(request),
         "message": message,
+        "active_page": "dashboard",
         "period": period,
         "period_options": PERIOD_OPTIONS,
         "start": start_text,
         "end": end_text,
         "selected_year": selected_year,
         "show_custom_dates": period == "Custom",
-        "selected_categories": set(active_categories),
-        "all_categories": INCOME_CATEGORIES + [c for c in EXPENSE_CATEGORIES if c not in INCOME_CATEGORIES],
         "transaction_view": transaction_view,
         "transaction_views": ["All", "Income", "Expenses", "Income Misc", "Expense Misc"],
-        "source_rows": source_rows(),
         "missing_sources": missing_sources,
         "show_upload_prompt": bool(missing_sources),
-        "rule_rows": rule_rows(),
         "income_total": currency(float(filtered_income["amount"].sum())) if not filtered_income.empty else currency(0.0),
         "expense_total": currency(float(filtered_expenses["amount"].sum())) if not filtered_expenses.empty else currency(0.0),
         "net_total": currency(float(filtered_income["amount"].sum()) - float(filtered_expenses["amount"].sum())),
         "misc_count": len(filter_frame(bundle.misc_income, start, end)) + len(filter_frame(bundle.misc_expenses, start, end)),
         "income_rows": category_rows(income_summary),
         "expense_rows": category_rows(expense_summary),
-        "monthly_rows": monthly_rows(filtered_income, filtered_expenses),
-        "income_transactions": transaction_rows(filtered_income, include_contact=True),
-        "expense_transactions": transaction_rows(filtered_expenses, include_contact=False),
+        "monthly_rows": monthly_rows(monthly_income_frame, monthly_expense_frame),
+        "income_transactions": transaction_rows(income_table_frame, include_contact=True),
+        "expense_transactions": transaction_rows(expense_table_frame, include_contact=False),
         "review_transactions": transaction_rows(transaction_frame, include_contact=True),
-        "export_query": all_query,
+        "export_query": export_query,
+        "income_focus": income_focus_value,
+        "expense_focus": expense_focus_value,
+        "monthly_focus": monthly_focus_value,
+        "review_focus": review_focus_value,
+        "income_categories": INCOME_CATEGORIES,
+        "expense_categories": EXPENSE_CATEGORIES,
+        "combined_categories": combined_categories,
+        "income_focus_links": {
+            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, "all", expense_focus_value, monthly_focus_value, review_focus_value),
+            **{
+                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, category, expense_focus_value, monthly_focus_value, review_focus_value)
+                for category in INCOME_CATEGORIES
+            },
+        },
+        "expense_focus_links": {
+            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, "all", monthly_focus_value, review_focus_value),
+            **{
+                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, category, monthly_focus_value, review_focus_value)
+                for category in EXPENSE_CATEGORIES
+            },
+        },
+        "monthly_focus_links": {
+            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, "all", review_focus_value),
+            **{
+                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, category, review_focus_value)
+                for category in combined_categories
+            },
+        },
+        "review_focus_links": {
+            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, monthly_focus_value, "all"),
+            **{
+                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, monthly_focus_value, category)
+                for category in combined_categories
+            },
+        },
+    }
+
+
+def files_context(request: Request, message: Optional[str]) -> dict[str, Any]:
+    return {
+        **base_template_context(request),
+        "message": message,
+        "active_page": "files",
+        "source_rows": source_rows(),
+        "rule_rows": rule_rows(),
+        "missing_sources": missing_source_keys(),
     }
 
 
@@ -486,15 +562,38 @@ def dashboard(
     start: str = Query(""),
     end: str = Query(""),
     selected_year: int = Query(date.today().year),
-    categories: list[str] = Query(default=[]),
     transaction_view: str = Query("All"),
+    income_focus: str = Query("all"),
+    expense_focus: str = Query("all"),
+    monthly_focus: str = Query("all"),
+    review_focus: str = Query("all"),
     message: Optional[str] = Query(None),
 ) -> HTMLResponse:
     auth_redirect = require_auth(request)
     if auth_redirect:
         return auth_redirect
-    context = dashboard_context(request, period, start, end, selected_year, categories, transaction_view, message)
+    context = dashboard_context(
+        request,
+        period,
+        start,
+        end,
+        selected_year,
+        transaction_view,
+        income_focus,
+        expense_focus,
+        monthly_focus,
+        review_focus,
+        message,
+    )
     return templates.TemplateResponse("dashboard.html", context)
+
+
+@app.get("/files", response_class=HTMLResponse)
+def files_page(request: Request, message: Optional[str] = Query(None)) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    return templates.TemplateResponse("files.html", files_context(request, message))
 
 
 @app.post("/upload/{source_key}")
@@ -505,16 +604,16 @@ async def upload_source(request: Request, source_key: str, file: UploadFile) -> 
     if source_key not in SOURCE_KEYS:
         raise HTTPException(status_code=404, detail="Unknown source key")
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        return RedirectResponse(url="/dashboard?message=Please upload a CSV file.", status_code=303)
+        return RedirectResponse(url="/files?message=Please upload a CSV file.", status_code=303)
 
     destination = current_source_paths()[source_key]
     contents = await file.read()
     try:
         added_rows, skipped_rows = merge_csv_bytes(destination, contents)
     except Exception as exc:
-        return RedirectResponse(url=f"/dashboard?message=Failed to merge uploaded CSV: {exc}", status_code=303)
+        return RedirectResponse(url=f"/files?message=Failed to merge uploaded CSV: {exc}", status_code=303)
     return RedirectResponse(
-        url=f"/dashboard?message=Updated {source_key} source file. Added {added_rows} new rows, skipped {skipped_rows} overlapping rows.",
+        url=f"/files?message=Updated {source_key} source file. Added {added_rows} new rows, skipped {skipped_rows} overlapping rows.",
         status_code=303,
     )
 
@@ -544,7 +643,7 @@ async def upload_rules(request: Request, rule_key: str, file: UploadFile) -> Red
     if rule_key not in RULE_FILE_MAP:
         raise HTTPException(status_code=404, detail="Unknown rule key")
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        return RedirectResponse(url="/dashboard?message=Please upload a CSV file.", status_code=303)
+        return RedirectResponse(url="/files?message=Please upload a CSV file.", status_code=303)
 
     filename, categories = RULE_FILE_MAP[rule_key]
     destination = ensure_web_rule_file(filename)
@@ -554,8 +653,8 @@ async def upload_rules(request: Request, rule_key: str, file: UploadFile) -> Red
         validated = load_rule_table(destination, categories)
         save_rule_table(destination, validated, categories)
     except Exception as exc:
-        return RedirectResponse(url=f"/dashboard?message=Failed to load uploaded rules: {exc}", status_code=303)
-    return RedirectResponse(url=f"/dashboard?message=Updated {rule_key} rules file.", status_code=303)
+        return RedirectResponse(url=f"/files?message=Failed to load uploaded rules: {exc}", status_code=303)
+    return RedirectResponse(url=f"/files?message=Updated {rule_key} rules file.", status_code=303)
 
 
 @app.get("/download/rules/{rule_key}")
@@ -583,21 +682,19 @@ def export_transactions(
     start: str = Query(""),
     end: str = Query(""),
     selected_year: int = Query(date.today().year),
-    categories: list[str] = Query(default=[]),
     transaction_view: str = Query("All"),
+    review_focus: str = Query("all"),
 ) -> StreamingResponse:
     auth_redirect = require_auth(request)
     if auth_redirect:
         return auth_redirect
     bundle, _missing_sources = load_bundle_safe()
-    active_categories = requested_categories(categories)
     start_date, end_date = period_range(period, start, end, selected_year)
     filtered_income = filter_frame(bundle.income, start_date, end_date)
     filtered_expenses = filter_frame(bundle.expenses, start_date, end_date)
-    if active_categories:
-        filtered_income = filtered_income[filtered_income["category"].isin(active_categories)]
-        filtered_expenses = filtered_expenses[filtered_expenses["category"].isin(active_categories)]
-    frame = frame_for_view(bundle, filtered_income, filtered_expenses, transaction_view, start_date, end_date).copy()
+    income_frame = apply_focus(filtered_income, review_focus if review_focus in INCOME_CATEGORIES else "all")
+    expense_frame = apply_focus(filtered_expenses, review_focus if review_focus in EXPENSE_CATEGORIES else "all")
+    frame = frame_for_view(bundle, income_frame, expense_frame, transaction_view, start_date, end_date).copy()
     if not frame.empty:
         frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
     csv_bytes = frame.to_csv(index=False).encode("utf-8")
@@ -608,30 +705,12 @@ def export_transactions(
     )
 
 
-@app.get("/auth/setup", response_class=HTMLResponse)
-def authenticator_setup(request: Request) -> HTMLResponse:
-    auth_redirect = require_auth(request)
-    if auth_redirect:
-        return auth_redirect
-    config_error = auth_config_error()
-    context = {
-        **base_template_context(request),
-        "config_error": config_error,
-        "username": auth_config()["username"],
-        "totp_secret": auth_config()["totp_secret"],
-        "otpauth_uri": "" if config_error else otpauth_uri(),
-        "qr_data_uri": "" if config_error else otpauth_qr_svg_data_uri(),
-    }
-    return templates.TemplateResponse("setup.html", context)
-
-
 def init_auth_secret() -> int:
     secret = pyotp.random_base32()
     username = os.getenv("MUUC_WEB_USERNAME", "admin")
     issuer = os.getenv("MUUC_TOTP_ISSUER", APP_NAME)
     uri = pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name=issuer)
     print(f"MUUC_WEB_USERNAME={username}")
-    print("MUUC_WEB_PASSWORD=choose-a-strong-password")
     print(f"MUUC_TOTP_SECRET={secret}")
     print("MUUC_SESSION_SECRET=choose-a-long-random-session-secret")
     print()

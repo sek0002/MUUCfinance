@@ -2,118 +2,74 @@
 
 {% block content %}
 {% if show_upload_prompt %}
-<section class="panel">
-  <div class="panel-head">
-    <h2>Upload Source CSVs</h2>
-  </div>
-  <p class="muted">
-    The app can start without source files. Upload the missing CSVs below to begin analysis.
-    Missing: {{ missing_sources | join(", ") }}.
-  </p>
+<section class="banner warning compact-banner">
+  Missing source CSVs: {{ missing_sources | join(", ") }}. Use the Files page to upload them.
 </section>
 {% endif %}
 
-<section class="panel">
-  <form method="get" action="/dashboard" class="filters">
-    <div class="field wide">
-      <label for="period">Period</label>
-      <select id="period" name="period" onchange="document.getElementById('custom-dates').style.display = this.value === 'Custom' ? 'grid' : 'none'">
-        {% for option in period_options %}
-        <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-      </select>
+<section class="hero-grid">
+  <article class="panel filter-card">
+    <div class="panel-head tight">
+      <h2>Date Filter</h2>
     </div>
+    <form method="get" action="/dashboard" class="minimal-filter-form">
+      <input type="hidden" name="transaction_view" value="{{ transaction_view }}">
+      <input type="hidden" name="income_focus" value="{{ income_focus }}">
+      <input type="hidden" name="expense_focus" value="{{ expense_focus }}">
+      <input type="hidden" name="monthly_focus" value="{{ monthly_focus }}">
+      <input type="hidden" name="review_focus" value="{{ review_focus }}">
 
-    <div id="custom-dates" class="field-row" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
       <div class="field">
-        <label for="start">Start</label>
-        <input id="start" name="start" type="date" value="{{ start }}">
+        <select id="period" name="period" onchange="document.getElementById('custom-dates').style.display = this.value === 'Custom' ? 'grid' : 'none'">
+          {% for option in period_options %}
+          <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </div>
+
+      <div id="custom-dates" class="field-row compact" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
+        <div class="field">
+          <input id="start" name="start" type="date" value="{{ start }}">
+        </div>
+        <div class="field">
+          <input id="end" name="end" type="date" value="{{ end }}">
+        </div>
+      </div>
+
       <div class="field">
-        <label for="end">End</label>
-        <input id="end" name="end" type="date" value="{{ end }}">
+        <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
       </div>
-    </div>
 
-    <div class="field">
-      <label for="selected_year">Selected Year</label>
-      <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
-    </div>
-
-    <div class="field">
-      <label for="transaction_view">Transaction View</label>
-      <select id="transaction_view" name="transaction_view">
-        {% for option in transaction_views %}
-        <option value="{{ option }}" {% if option == transaction_view %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="field full">
-      <label>Categories</label>
-      <div class="pill-grid">
-        {% for category in all_categories %}
-        <label class="pill">
-          <input type="checkbox" name="categories" value="{{ category }}" {% if category in selected_categories %}checked{% endif %}>
-          <span>{{ category }}</span>
-        </label>
-        {% endfor %}
+      <div class="field">
+        <select id="transaction_view" name="transaction_view">
+          {% for option in transaction_views %}
+          <option value="{{ option }}" {% if option == transaction_view %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </div>
-    </div>
 
-    <div class="actions full">
-      <button type="submit">Apply Filters</button>
-      <a class="ghost-link" href="/transactions/export?{{ export_query }}">Export Transactions</a>
-    </div>
-  </form>
-</section>
-
-<section class="source-grid">
-  {% for source in source_rows %}
-  <article class="source-card">
-    <div>
-      <div class="eyebrow">{{ source.label }}</div>
-      <div class="source-path">{{ source.path }}</div>
-      <div class="muted">{{ source.latest }}</div>
-    </div>
-    <div class="source-actions">
-      {% if source.exists %}
-      <a class="ghost-link" href="/download/source/{{ source.key }}">Download Current</a>
-      {% endif %}
-      <form method="post" action="/upload/{{ source.key }}" enctype="multipart/form-data" class="upload-form">
-        <input type="file" name="file" accept=".csv" required>
-        <button type="submit">{% if source.exists %}Upload Replacement{% else %}Upload CSV{% endif %}</button>
-      </form>
-    </div>
+      <div class="actions">
+        <button type="submit">Apply</button>
+      </div>
+    </form>
   </article>
-  {% endfor %}
-</section>
 
-<section class="source-grid">
-  {% for rule in rule_rows %}
-  <article class="source-card">
-    <div>
-      <div class="eyebrow">{{ rule.label }}</div>
-      <div class="source-path">{{ rule.path }}</div>
-      <div class="muted">{{ rule.rows }} rows</div>
+  <article class="panel utility-card">
+    <div class="utility-copy">
+      <div class="eyebrow">Data Management</div>
+      <h2>Files</h2>
+      <p class="muted">Upload source CSVs and rule tables from a separate page.</p>
     </div>
-    <div class="source-actions">
-      <a class="ghost-link" href="/download/rules/{{ rule.key }}">Download Current</a>
-      <form method="post" action="/upload/rules/{{ rule.key }}" enctype="multipart/form-data" class="upload-form">
-        <input type="file" name="file" accept=".csv" required>
-        <button type="submit">Upload Replacement</button>
-      </form>
-    </div>
+    <a class="pill-link" href="/files">Open Files</a>
   </article>
-  {% endfor %}
 </section>
 
-<section class="summary-grid">
-  <article class="metric-card">
+<section class="summary-grid stripe-summary">
+  <article class="metric-card primary">
     <span>Income</span>
     <strong>{{ income_total }}</strong>
   </article>
-  <article class="metric-card">
+  <article class="metric-card primary">
     <span>Expenses</span>
     <strong>{{ expense_total }}</strong>
   </article>
@@ -127,10 +83,16 @@
   </article>
 </section>
 
-<section class="chart-grid">
-  <article class="panel">
-    <div class="panel-head">
-      <h2>Income by Category</h2>
+<section class="chart-grid stripe-cards">
+  <article class="panel insight-card">
+    <div class="panel-head tight">
+      <h2>Income Breakdown</h2>
+      <div class="mini-pills">
+        <a href="{{ income_focus_links['all'] }}" class="mini-pill{% if income_focus == 'all' %} active{% endif %}">All</a>
+        {% for category in income_categories %}
+        <a href="{{ income_focus_links[category] }}" class="mini-pill{% if income_focus == category %} active{% endif %}">{{ category }}</a>
+        {% endfor %}
+      </div>
     </div>
     {% if income_rows %}
     <div class="bar-list">
@@ -151,9 +113,15 @@
     {% endif %}
   </article>
 
-  <article class="panel">
-    <div class="panel-head">
-      <h2>Expenses by Category</h2>
+  <article class="panel insight-card">
+    <div class="panel-head tight">
+      <h2>Expense Breakdown</h2>
+      <div class="mini-pills">
+        <a href="{{ expense_focus_links['all'] }}" class="mini-pill{% if expense_focus == 'all' %} active{% endif %}">All</a>
+        {% for category in expense_categories %}
+        <a href="{{ expense_focus_links[category] }}" class="mini-pill{% if expense_focus == category %} active{% endif %}">{{ category }}</a>
+        {% endfor %}
+      </div>
     </div>
     {% if expense_rows %}
     <div class="bar-list">
@@ -175,9 +143,15 @@
   </article>
 </section>
 
-<section class="panel">
-  <div class="panel-head">
-    <h2>Monthly Breakdown</h2>
+<section class="panel full-width-card">
+  <div class="panel-head tight">
+    <h2>Monthly Flow</h2>
+    <div class="mini-pills">
+      <a href="{{ monthly_focus_links['all'] }}" class="mini-pill{% if monthly_focus == 'all' %} active{% endif %}">All</a>
+      {% for category in combined_categories %}
+      <a href="{{ monthly_focus_links[category] }}" class="mini-pill{% if monthly_focus == category %} active{% endif %}">{{ category }}</a>
+      {% endfor %}
+    </div>
   </div>
   {% if monthly_rows %}
   <div class="monthly-table">
@@ -202,10 +176,16 @@
   {% endif %}
 </section>
 
-<section class="table-grid">
+<section class="table-grid stripe-cards">
   <article class="panel">
-    <div class="panel-head">
-      <h2>Filtered Income</h2>
+    <div class="panel-head tight">
+      <h2>Income Transactions</h2>
+      <div class="mini-pills">
+        <a href="{{ review_focus_links['all'] }}" class="mini-pill{% if review_focus == 'all' %} active{% endif %}">All</a>
+        {% for category in income_categories %}
+        <a href="{{ review_focus_links[category] }}" class="mini-pill{% if review_focus == category %} active{% endif %}">{{ category }}</a>
+        {% endfor %}
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -236,8 +216,14 @@
   </article>
 
   <article class="panel">
-    <div class="panel-head">
-      <h2>Filtered Expenses</h2>
+    <div class="panel-head tight">
+      <h2>Expense Transactions</h2>
+      <div class="mini-pills">
+        <a href="{{ review_focus_links['all'] }}" class="mini-pill{% if review_focus == 'all' %} active{% endif %}">All</a>
+        {% for category in expense_categories %}
+        <a href="{{ review_focus_links[category] }}" class="mini-pill{% if review_focus == category %} active{% endif %}">{{ category }}</a>
+        {% endfor %}
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -264,9 +250,12 @@
   </article>
 </section>
 
-<section class="panel">
-  <div class="panel-head">
-    <h2>Transaction Review</h2>
+<section class="panel full-width-card">
+  <div class="panel-head tight">
+    <h2>Review</h2>
+    <div class="actions">
+      <a class="ghost-link" href="/transactions/export?{{ export_query }}">Export</a>
+    </div>
   </div>
   <div class="table-wrap">
     <table>
