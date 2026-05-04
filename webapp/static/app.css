@@ -50,11 +50,11 @@ code, textarea, input, select, button { font: inherit; }
 
 .shell-login {
   min-height: 100vh;
-  width: min(100vw - 24px, 520px);
+  width: min(100vw - 32px, 1260px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 24px 0;
 }
 
 .topbar {
@@ -797,16 +797,21 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-shell {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(420px, 1fr));
+  gap: 20px;
+  align-items: stretch;
 }
 
 .login-panel {
-  padding: 18px;
+  padding: 22px 24px;
   border-radius: 24px;
   background: color-mix(in srgb, var(--panel) 92%, transparent 8%);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
+  display: grid;
+  grid-template-rows: auto auto minmax(84px, auto) 1fr;
+  gap: 10px;
+  min-height: 100%;
 }
 
 .login-panel h2 {
@@ -848,7 +853,9 @@ td.amount { text-align: right; white-space: nowrap; }
 
 .stacked-login-form {
   grid-template-columns: 1fr;
-  margin-top: 14px;
+  margin-top: 8px;
+  width: min(100%, 520px);
+  align-self: end;
 }
 
 .stacked-login-form button {
@@ -873,7 +880,7 @@ td.amount { text-align: right; white-space: nowrap; }
   }
 
   .shell-login {
-    width: min(100vw - 16px, 520px);
+    width: min(100vw - 16px, 640px);
   }
 
   .topbar {
