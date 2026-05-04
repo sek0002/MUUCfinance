@@ -104,12 +104,6 @@ def verify_totp(code: str) -> bool:
 
 def ensure_web_source_dir() -> Path:
     WEB_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
-    for key in SOURCE_KEYS:
-        filename = SOURCE_FILENAMES[key]
-        destination = WEB_SOURCE_DIR / filename
-        bundled_path = RUNTIME_DIR / "source" / filename
-        if not destination.exists() and bundled_path.exists():
-            destination.write_bytes(bundled_path.read_bytes())
     return WEB_SOURCE_DIR
 
 
@@ -131,12 +125,24 @@ def current_rule_paths() -> tuple[Path, Path]:
     return ensure_web_rule_file("income_rules.csv"), ensure_web_rule_file("expense_rules.csv")
 
 
+def empty_income_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]
+    )
+
+
+def empty_expense_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=["date", "description", "category", "matched", "amount", "source", "reference", "name", "email"]
+    )
+
+
 def empty_bundle() -> AnalysisBundle:
     return AnalysisBundle(
-        income=pd.DataFrame(),
-        expenses=pd.DataFrame(),
-        misc_income=pd.DataFrame(),
-        misc_expenses=pd.DataFrame(),
+        income=empty_income_frame(),
+        expenses=empty_expense_frame(),
+        misc_income=empty_income_frame(),
+        misc_expenses=empty_expense_frame(),
     )
 
 
@@ -219,7 +225,10 @@ def frame_for_view(
         return filter_frame(bundle.misc_income, start, end)
     if view == "Expense Misc":
         return filter_frame(bundle.misc_expenses, start, end)
-    return pd.concat([income, expenses], ignore_index=True, sort=False).sort_values("date")
+    combined = pd.concat([income, expenses], ignore_index=True, sort=False)
+    if "date" in combined.columns:
+        return combined.sort_values("date")
+    return combined
 
 
 def category_rows(series: pd.Series) -> list[dict[str, Any]]:
