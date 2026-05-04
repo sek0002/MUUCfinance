@@ -92,10 +92,13 @@
         <input type="hidden" name="chart_style" value="{{ chart_style }}">
         {% endif %}
 
-        <div class="mode-toggle" data-active="{{ graph_mode }}" role="tablist" aria-label="Chart mode">
-          <a href="{{ graph_mode_links['totals'] }}" class="mode-toggle-option{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
-          <a href="{{ graph_mode_links['category'] }}" class="mode-toggle-option{% if graph_mode == 'category' %} active{% endif %}">Category</a>
-          <a href="{{ graph_mode_links['pie'] }}" class="mode-toggle-option{% if graph_mode == 'pie' %} active{% endif %}">Pie</a>
+        <div class="toggle-control">
+          <label class="toolbar-label">Type</label>
+          <div class="mode-toggle" data-active="{{ graph_mode }}" role="tablist" aria-label="Chart mode">
+            <a href="{{ graph_mode_links['totals'] }}" class="mode-toggle-option{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
+            <a href="{{ graph_mode_links['category'] }}" class="mode-toggle-option{% if graph_mode == 'category' %} active{% endif %}">Category</a>
+            <a href="{{ graph_mode_links['pie'] }}" class="mode-toggle-option{% if graph_mode == 'pie' %} active{% endif %}">Pie</a>
+          </div>
         </div>
 
         {% if graph_mode != 'pie' %}

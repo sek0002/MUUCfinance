@@ -517,7 +517,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
     plot_height = height - margin_top - margin_bottom
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -615,7 +615,7 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
     bar_width = max(inner_width / series_count, 10)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -704,7 +704,7 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     x_step = plot_width / max(len(labels) - 1, 1)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -776,7 +776,7 @@ def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.
     bar_width = min(group_width * 0.4, 120)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -858,7 +858,7 @@ def build_time_stacked_category_bar_svg(
     pair_gap = min(group_width * 0.1, 10)
 
     parts = [
-        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]

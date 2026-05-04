@@ -403,12 +403,13 @@ button {
 
 .chart-controls {
   display: grid;
-  grid-template-columns: auto minmax(170px, 230px) minmax(150px, 190px) minmax(140px, 170px) minmax(220px, 1fr);
+  grid-template-columns: minmax(220px, 260px) minmax(160px, 210px) minmax(180px, 240px) minmax(160px, 220px) minmax(180px, 1fr);
   align-items: center;
-  gap: 10px 12px;
-  margin-bottom: 10px;
+  gap: 8px 10px;
+  margin-bottom: 8px;
 }
 
+.toggle-control,
 .window-control,
 .period-control,
 .category-select,
@@ -418,6 +419,7 @@ button {
   min-width: 0;
 }
 
+.toggle-control label,
 .window-control label,
 .period-control label,
 .category-select label,
@@ -440,7 +442,7 @@ button {
 
 .chart-title-inline span {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--muted);
   font-size: 0.82rem;
 }
@@ -483,11 +485,11 @@ button {
   position: relative;
   z-index: 1;
   min-width: 0;
-  padding: 8px 14px;
+  padding: 7px 10px;
   border-radius: 999px;
   color: var(--muted);
   text-align: center;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
   white-space: nowrap;
   transition: color 180ms ease;
@@ -531,14 +533,14 @@ button {
   position: relative;
   z-index: 1;
   min-width: 0;
-  padding: 8px 14px;
+  padding: 7px 10px;
   border: 0;
   background: transparent;
   border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
   transition: color 180ms ease;
 }
@@ -589,13 +591,13 @@ button {
   position: relative;
   z-index: 1;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 7px 8px;
   border: 0;
   background: transparent;
   color: var(--muted);
   text-align: center;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -779,7 +781,7 @@ button {
 .axis-line { stroke: color-mix(in srgb, var(--line) 78%, white 22%); stroke-width: 1.2; }
 .grid-line { stroke: color-mix(in srgb, var(--line) 56%, white 44%); stroke-width: 1; }
 .axis-label,
-.legend-label { fill: var(--muted); font-size: 11px; }
+.legend-label { fill: var(--muted); font-size: 13px; }
 .year-inset {
   fill: color-mix(in srgb, var(--panel-soft) 76%, var(--panel) 24%);
   stroke: var(--line);
