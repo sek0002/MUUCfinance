@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from muuc_finance_app import (
+from muuc_finance_core import (
     APP_NAME,
     EXPENSE_CATEGORIES,
     INCOME_CATEGORIES,
