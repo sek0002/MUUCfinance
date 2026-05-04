@@ -75,6 +75,26 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 MANIFEST_PATH = STATIC_DIR / "manifest.webmanifest"
 SERVICE_WORKER_PATH = STATIC_DIR / "sw.js"
+ASSET_VERSION_PATHS = [
+    TEMPLATES_DIR / "base.html",
+    TEMPLATES_DIR / "dashboard.html",
+    TEMPLATES_DIR / "files.html",
+    TEMPLATES_DIR / "rules.html",
+    TEMPLATES_DIR / "login.html",
+    STATIC_DIR / "app.css",
+    STATIC_DIR / "logo.png",
+    STATIC_DIR / "sw.js",
+    STATIC_DIR / "manifest.webmanifest",
+    STATIC_DIR / "icons" / "favicon-32.png",
+    STATIC_DIR / "icons" / "apple-touch-icon.png",
+    STATIC_DIR / "icons" / "icon-192.png",
+    STATIC_DIR / "icons" / "icon-512.png",
+]
+ASSET_VERSION = str(
+    int(
+        max(path.stat().st_mtime for path in ASSET_VERSION_PATHS if path.exists())
+    )
+)
 
 
 def auth_config() -> dict[str, str]:
@@ -561,6 +581,7 @@ def base_template_context(request: Request) -> dict[str, Any]:
         "request": request,
         "app_name": APP_NAME,
         "auth_error": auth_config_error(),
+        "asset_version": ASSET_VERSION,
     }
 
 

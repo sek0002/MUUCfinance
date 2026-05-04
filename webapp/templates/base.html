@@ -8,17 +8,17 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="MUUC Finance">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/icons/favicon-32.png') }}">
-  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/apple-touch-icon.png') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  <link rel="manifest" href="/manifest.webmanifest?v={{ asset_version }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ asset_version }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/apple-touch-icon.png') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ asset_version }}">
 </head>
 <body>
   <div class="shell{% if login_page %} shell-login{% endif %}">
     {% if not login_page %}
     <header class="topbar">
       <div class="brand-block">
-        <img class="brand-mark" src="{{ url_for('static', path='/logo.png') }}" alt="MUUC Finance logo">
+        <img class="brand-mark" src="{{ url_for('static', path='/logo.png') }}?v={{ asset_version }}" alt="MUUC Finance logo">
         <div class="brand-copy">
           <div class="eyebrow">Melbourne University Underwater Club</div>
           <h1>{{ app_name }}</h1>
@@ -51,7 +51,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("/sw.js");
+        navigator.serviceWorker.register("/sw.js?v={{ asset_version }}");
       });
     }
   </script>

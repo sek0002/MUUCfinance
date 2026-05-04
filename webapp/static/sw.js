@@ -1,4 +1,4 @@
-const CACHE_NAME = "muuc-finance-v1";
+const CACHE_NAME = "muuc-finance-v2";
 const APP_SHELL = [
   "/",
   "/login",
