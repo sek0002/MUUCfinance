@@ -4,6 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name }}</title>
+  <meta name="theme-color" content="#635bff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MUUC Finance">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/icons/favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
 </head>
 <body>
@@ -11,13 +18,17 @@
     {% if not login_page %}
     <header class="topbar">
       <div class="brand-block">
-        <div class="eyebrow">MUUC Finance</div>
-        <h1>{{ app_name }}</h1>
+        <img class="brand-mark" src="{{ url_for('static', path='/logo.png') }}" alt="MUUC Finance logo">
+        <div class="brand-copy">
+          <div class="eyebrow">Melbourne University Underwater Club</div>
+          <h1>{{ app_name }}</h1>
+        </div>
       </div>
       <div class="topbar-actions">
         <nav class="topnav">
           <a class="nav-pill{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
-          <a class="nav-pill{% if active_page == 'files' %} active{% endif %}" href="/files">Files</a>
+          <a class="nav-pill{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
+          <a class="nav-pill{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>
         </nav>
         {% if request.session.get("authenticated") %}
         <form method="post" action="/logout">
@@ -37,5 +48,12 @@
 
     {% block content %}{% endblock %}
   </div>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js");
+      });
+    }
+  </script>
 </body>
 </html>

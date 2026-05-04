@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import io
 import os
 import re
@@ -13,7 +14,7 @@ import pandas as pd
 import pyotp
 import uvicorn
 from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -72,6 +73,8 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+MANIFEST_PATH = STATIC_DIR / "manifest.webmanifest"
+SERVICE_WORKER_PATH = STATIC_DIR / "sw.js"
 
 
 def auth_config() -> dict[str, str]:
@@ -202,20 +205,30 @@ def requested_categories(categories: list[str]) -> list[str]:
     return [category for category in categories if category in allowed]
 
 
+WINDOW_OPTIONS = ["day", "week", "month", "year"]
+
+
 def dashboard_base_params(
     period: str,
     start_text: str,
     end_text: str,
     selected_year: int,
-    transaction_view: str,
+    graph_mode: str,
+    line_category: str,
+    window_scale: int,
+    pie_categories: list[str],
 ) -> list[tuple[str, str]]:
-    return [
+    params = [
         ("period", period),
         ("start", start_text),
         ("end", end_text),
         ("selected_year", str(selected_year)),
-        ("transaction_view", transaction_view),
+        ("graph_mode", graph_mode),
+        ("line_category", line_category),
+        ("window_scale", str(window_scale)),
     ]
+    params.extend([("pie_categories", category) for category in pie_categories])
+    return params
 
 
 def dashboard_url(
@@ -223,21 +236,12 @@ def dashboard_url(
     start_text: str,
     end_text: str,
     selected_year: int,
-    transaction_view: str,
-    income_focus: str,
-    expense_focus: str,
-    monthly_focus: str,
-    review_focus: str,
+    graph_mode: str,
+    line_category: str,
+    window_scale: int,
+    pie_categories: list[str],
 ) -> str:
-    params = dashboard_base_params(period, start_text, end_text, selected_year, transaction_view)
-    params.extend(
-        [
-            ("income_focus", income_focus),
-            ("expense_focus", expense_focus),
-            ("monthly_focus", monthly_focus),
-            ("review_focus", review_focus),
-        ]
-    )
+    params = dashboard_base_params(period, start_text, end_text, selected_year, graph_mode, line_category, window_scale, pie_categories)
     return f"/dashboard?{urlencode(params)}"
 
 
@@ -271,6 +275,166 @@ def apply_focus(frame: pd.DataFrame, category: str) -> pd.DataFrame:
     if frame.empty or not category or category == "all" or "category" not in frame.columns:
         return frame.copy()
     return frame[frame["category"] == category].copy()
+
+
+def aggregate_series(frame: pd.DataFrame, window_key: str) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype="float64")
+    out = frame.copy()
+    dates = pd.to_datetime(out["date"], errors="coerce")
+    if window_key == "day":
+        out["bucket"] = dates.dt.strftime("%Y-%m-%d")
+    elif window_key == "week":
+        out["bucket"] = dates.dt.to_period("W").astype(str)
+    elif window_key == "year":
+        out["bucket"] = dates.dt.strftime("%Y")
+    else:
+        out["bucket"] = dates.dt.to_period("M").astype(str)
+    out = out[out["bucket"].notna()].copy()
+    if out.empty:
+        return pd.Series(dtype="float64")
+    return out.groupby("bucket")["amount"].sum().sort_index()
+
+
+def svg_tooltip_script() -> str:
+    return """
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const tip = document.createElement('div');
+      tip.className = 'svg-tooltip';
+      tip.style.display = 'none';
+      document.body.appendChild(tip);
+      document.querySelectorAll('[data-tooltip]').forEach(function (node) {
+        node.addEventListener('mouseenter', function (event) {
+          tip.textContent = node.getAttribute('data-tooltip');
+          tip.style.display = 'block';
+        });
+        node.addEventListener('mousemove', function (event) {
+          tip.style.left = (event.pageX + 14) + 'px';
+          tip.style.top = (event.pageY - 12) + 'px';
+        });
+        node.addEventListener('mouseleave', function () {
+          tip.style.display = 'none';
+        });
+      });
+    });
+    </script>
+    """
+
+
+def build_line_chart_svg(series_map: dict[str, pd.Series], title: str) -> str:
+    width = 1160
+    height = 380
+    margin_left = 64
+    margin_right = 32
+    margin_top = 28
+    margin_bottom = 54
+    colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
+    active_series = {label: series for label, series in series_map.items() if not series.empty}
+    if not active_series:
+        return '<div class="chart-empty">No data in the selected range.</div>'
+
+    labels = []
+    for series in active_series.values():
+        for label in series.index.tolist():
+            if label not in labels:
+                labels.append(label)
+    labels = sorted(labels)
+    max_value = max(float(series.max()) for series in active_series.values()) if active_series else 1.0
+    max_value = max(max_value, 1.0)
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+
+    parts = [
+        f'<svg class="chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<text x="{margin_left}" y="18" class="chart-title">{html.escape(title)}</text>',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
+    ]
+
+    for tick in range(5):
+        ratio = tick / 4
+        y = margin_top + plot_height - (plot_height * ratio)
+        value = max_value * ratio
+        parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
+        parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
+
+    x_step = plot_width / max(len(labels) - 1, 1)
+    for index, label in enumerate(labels):
+        x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
+        if index < 8 or index == len(labels) - 1 or index % max(len(labels) // 6, 1) == 0:
+            parts.append(f'<text x="{x:.1f}" y="{height - 18}" text-anchor="middle" class="axis-label">{html.escape(label)}</text>')
+
+    legend_x = margin_left
+    for idx, (series_name, series) in enumerate(active_series.items()):
+        color = colors[idx % len(colors)]
+        points = []
+        for label_idx, label in enumerate(labels):
+            value = float(series.get(label, 0.0))
+            x = margin_left + (label_idx * x_step if len(labels) > 1 else plot_width / 2)
+            y = margin_top + plot_height - ((value / max_value) * plot_height)
+            points.append((x, y, value, label))
+        path_data = " ".join([f"{'M' if i == 0 else 'L'} {x:.1f} {y:.1f}" for i, (x, y, _value, _label) in enumerate(points)])
+        parts.append(f'<path d="{path_data}" fill="none" stroke="{color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />')
+        for x, y, value, label in points:
+            tooltip = f"{series_name} | {label} | {currency(value)}"
+            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
+        parts.append(f'<circle cx="{legend_x}" cy="{height - 8}" r="5" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 12}" y="{height - 4}" class="legend-label">{html.escape(series_name)}</text>')
+        legend_x += 150
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def pie_arc(cx: float, cy: float, radius: float, start_angle: float, end_angle: float) -> str:
+    import math
+
+    start_x = cx + radius * math.cos(start_angle)
+    start_y = cy + radius * math.sin(start_angle)
+    end_x = cx + radius * math.cos(end_angle)
+    end_y = cy + radius * math.sin(end_angle)
+    large_arc = 1 if end_angle - start_angle > math.pi else 0
+    return f"M {cx:.1f} {cy:.1f} L {start_x:.1f} {start_y:.1f} A {radius:.1f} {radius:.1f} 0 {large_arc} 1 {end_x:.1f} {end_y:.1f} Z"
+
+
+def build_pie_svg(income_series: pd.Series, expense_series: pd.Series) -> str:
+    import math
+
+    width = 1160
+    height = 360
+    colors = ["#00a67e", "#3b82f6", "#635bff", "#f59e0b", "#db5b7b", "#0ea5e9", "#a855f7", "#14b8a6", "#64748b"]
+    sections = [("Income", income_series, 280), ("Expenses", expense_series, 820)]
+    parts = [f'<svg class="chart-svg pie-svg" viewBox="0 0 {width} {height}" role="img" aria-label="Income and expense pie charts">']
+    for title, series, center_x in sections:
+        total = float(series.sum()) if not series.empty else 0.0
+        parts.append(f'<text x="{center_x}" y="28" text-anchor="middle" class="chart-title">{html.escape(title)}</text>')
+        if total <= 0:
+            parts.append(f'<text x="{center_x}" y="180" text-anchor="middle" class="axis-label">No data</text>')
+            continue
+        start = -math.pi / 2
+        center_y = 160
+        radius = 88
+        for idx, (category, amount) in enumerate(series.items()):
+            if float(amount) <= 0:
+                continue
+            sweep = (float(amount) / total) * math.tau
+            end = start + sweep
+            color = colors[idx % len(colors)]
+            tooltip = f"{title} | {category} | {currency(float(amount))} ({(float(amount)/total)*100:.1f}%)"
+            path = pie_arc(center_x, center_y, radius, start, end)
+            parts.append(f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="2" data-tooltip="{html.escape(tooltip)}" />')
+            start = end
+        legend_y = 280
+        for idx, (category, amount) in enumerate(series.items()):
+            if float(amount) <= 0:
+                continue
+            color = colors[idx % len(colors)]
+            tooltip = f"{title} | {category} | {currency(float(amount))}"
+            parts.append(f'<rect x="{center_x - 108}" y="{legend_y + idx*20}" width="12" height="12" rx="3" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
+            parts.append(f'<text x="{center_x - 90}" y="{legend_y + idx*20 + 10}" class="legend-label">{html.escape(category)} {html.escape(currency(float(amount)))}</text>')
+    parts.append("</svg>")
+    return "".join(parts)
 
 
 def category_rows(series: pd.Series) -> list[dict[str, Any]]:
@@ -406,51 +570,68 @@ def dashboard_context(
     start_text: str,
     end_text: str,
     selected_year: int,
-    transaction_view: str,
-    income_focus: str,
-    expense_focus: str,
-    monthly_focus: str,
-    review_focus: str,
+    graph_mode: str,
+    line_category: str,
+    window_scale: int,
+    pie_categories: list[str],
     message: Optional[str],
 ) -> dict[str, Any]:
     bundle, missing_sources = load_bundle_safe()
     start, end = period_range(period, start_text, end_text, selected_year)
-
     filtered_income = filter_frame(bundle.income, start, end)
     filtered_expenses = filter_frame(bundle.expenses, start, end)
-    income_focus_value = income_focus if income_focus in INCOME_CATEGORIES else "all"
-    expense_focus_value = expense_focus if expense_focus in EXPENSE_CATEGORIES else "all"
-    monthly_focus_value = monthly_focus if monthly_focus in dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES) else "all"
-    review_focus_value = review_focus if review_focus in dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES) else "all"
+    all_categories = list(dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES))
+    graph_mode_value = graph_mode if graph_mode in {"totals", "category", "pie"} else "totals"
+    line_category_value = line_category if line_category in all_categories else (all_categories[0] if all_categories else "")
+    window_scale_value = window_scale if 0 <= window_scale < len(WINDOW_OPTIONS) else 2
+    window_key = WINDOW_OPTIONS[window_scale_value]
+    pie_selected = [category for category in pie_categories if category in all_categories]
+    if not pie_selected:
+        pie_selected = all_categories[:]
 
-    income_chart_frame = apply_focus(filtered_income, income_focus_value)
-    expense_chart_frame = apply_focus(filtered_expenses, expense_focus_value)
-    monthly_income_frame = apply_focus(filtered_income, monthly_focus_value if monthly_focus_value in INCOME_CATEGORIES else "all")
-    monthly_expense_frame = apply_focus(filtered_expenses, monthly_focus_value if monthly_focus_value in EXPENSE_CATEGORIES else "all")
-    income_table_frame = apply_focus(filtered_income, review_focus_value if review_focus_value in INCOME_CATEGORIES else "all")
-    expense_table_frame = apply_focus(filtered_expenses, review_focus_value if review_focus_value in EXPENSE_CATEGORIES else "all")
+    income_summary = summarize_categories(filtered_income, INCOME_CATEGORIES, [])
+    expense_summary = summarize_categories(filtered_expenses, EXPENSE_CATEGORIES, [])
+    recent_transactions = frame_for_view(bundle, filtered_income, filtered_expenses, "All", start, end)
 
-    income_summary = summarize_categories(income_chart_frame, INCOME_CATEGORIES, [])
-    expense_summary = summarize_categories(expense_chart_frame, EXPENSE_CATEGORIES, [])
-    transaction_frame = frame_for_view(bundle, income_table_frame, expense_table_frame, transaction_view, start, end)
-    export_query = urlencode(
-        dashboard_base_params(period, start_text, end_text, selected_year, transaction_view)
-        + [("review_focus", review_focus_value)]
-    )
-    combined_categories = list(dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES))
+    chart_title = "Total Income & Total Expenses"
+    if graph_mode_value == "totals":
+        chart_svg = build_line_chart_svg(
+            {
+                "Income": aggregate_series(filtered_income, window_key),
+                "Expenses": aggregate_series(filtered_expenses, window_key),
+            },
+            chart_title,
+        )
+    elif graph_mode_value == "category":
+        income_category_frame = apply_focus(filtered_income, line_category_value if line_category_value in INCOME_CATEGORIES else "all")
+        expense_category_frame = apply_focus(filtered_expenses, line_category_value if line_category_value in EXPENSE_CATEGORIES else "all")
+        chart_title = f"Income & Expenses for {line_category_value}"
+        chart_svg = build_line_chart_svg(
+            {
+                "Income": aggregate_series(income_category_frame, window_key),
+                "Expenses": aggregate_series(expense_category_frame, window_key),
+            },
+            chart_title,
+        )
+    else:
+        chart_title = "Pie Breakdown"
+        pie_income = summarize_categories(filtered_income[filtered_income["category"].isin(pie_selected)], INCOME_CATEGORIES, [])
+        pie_expense = summarize_categories(filtered_expenses[filtered_expenses["category"].isin(pie_selected)], EXPENSE_CATEGORIES, [])
+        chart_svg = build_pie_svg(pie_income, pie_expense)
+
+    export_query = urlencode(dashboard_base_params(period, start_text, end_text, selected_year, graph_mode_value, line_category_value, window_scale_value, pie_selected))
 
     return {
         **base_template_context(request),
         "message": message,
         "active_page": "dashboard",
+        "source_rows": source_rows(),
         "period": period,
         "period_options": PERIOD_OPTIONS,
         "start": start_text,
         "end": end_text,
         "selected_year": selected_year,
         "show_custom_dates": period == "Custom",
-        "transaction_view": transaction_view,
-        "transaction_views": ["All", "Income", "Expenses", "Income Misc", "Expense Misc"],
         "missing_sources": missing_sources,
         "show_upload_prompt": bool(missing_sources),
         "income_total": currency(float(filtered_income["amount"].sum())) if not filtered_income.empty else currency(0.0),
@@ -459,46 +640,22 @@ def dashboard_context(
         "misc_count": len(filter_frame(bundle.misc_income, start, end)) + len(filter_frame(bundle.misc_expenses, start, end)),
         "income_rows": category_rows(income_summary),
         "expense_rows": category_rows(expense_summary),
-        "monthly_rows": monthly_rows(monthly_income_frame, monthly_expense_frame),
-        "income_transactions": transaction_rows(income_table_frame, include_contact=True),
-        "expense_transactions": transaction_rows(expense_table_frame, include_contact=False),
-        "review_transactions": transaction_rows(transaction_frame, include_contact=True),
+        "recent_transactions": transaction_rows(recent_transactions, include_contact=True)[:24],
         "export_query": export_query,
-        "income_focus": income_focus_value,
-        "expense_focus": expense_focus_value,
-        "monthly_focus": monthly_focus_value,
-        "review_focus": review_focus_value,
-        "income_categories": INCOME_CATEGORIES,
-        "expense_categories": EXPENSE_CATEGORIES,
-        "combined_categories": combined_categories,
-        "income_focus_links": {
-            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, "all", expense_focus_value, monthly_focus_value, review_focus_value),
-            **{
-                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, category, expense_focus_value, monthly_focus_value, review_focus_value)
-                for category in INCOME_CATEGORIES
-            },
+        "graph_mode": graph_mode_value,
+        "graph_mode_links": {
+            mode: dashboard_url(period, start_text, end_text, selected_year, mode, line_category_value, window_scale_value, pie_selected)
+            for mode in ["totals", "category", "pie"]
         },
-        "expense_focus_links": {
-            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, "all", monthly_focus_value, review_focus_value),
-            **{
-                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, category, monthly_focus_value, review_focus_value)
-                for category in EXPENSE_CATEGORIES
-            },
-        },
-        "monthly_focus_links": {
-            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, "all", review_focus_value),
-            **{
-                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, category, review_focus_value)
-                for category in combined_categories
-            },
-        },
-        "review_focus_links": {
-            "all": dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, monthly_focus_value, "all"),
-            **{
-                category: dashboard_url(period, start_text, end_text, selected_year, transaction_view, income_focus_value, expense_focus_value, monthly_focus_value, category)
-                for category in combined_categories
-            },
-        },
+        "line_category": line_category_value,
+        "all_categories": all_categories,
+        "pie_categories_selected": set(pie_selected),
+        "window_scale": window_scale_value,
+        "window_key": window_key,
+        "window_label": WINDOW_OPTIONS[window_scale_value].title(),
+        "chart_title": chart_title,
+        "chart_svg": chart_svg,
+        "chart_tooltip_script": svg_tooltip_script(),
     }
 
 
@@ -513,11 +670,30 @@ def files_context(request: Request, message: Optional[str]) -> dict[str, Any]:
     }
 
 
+def rules_context(request: Request, message: Optional[str]) -> dict[str, Any]:
+    return {
+        **base_template_context(request),
+        "message": message,
+        "active_page": "rules",
+        "rule_rows": rule_rows(),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request) -> RedirectResponse:
     if request.session.get("authenticated"):
         return RedirectResponse(url="/dashboard", status_code=303)
     return RedirectResponse(url="/login", status_code=303)
+
+
+@app.get("/manifest.webmanifest")
+def manifest_file() -> FileResponse:
+    return FileResponse(MANIFEST_PATH, media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def service_worker() -> FileResponse:
+    return FileResponse(SERVICE_WORKER_PATH, media_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -562,11 +738,10 @@ def dashboard(
     start: str = Query(""),
     end: str = Query(""),
     selected_year: int = Query(date.today().year),
-    transaction_view: str = Query("All"),
-    income_focus: str = Query("all"),
-    expense_focus: str = Query("all"),
-    monthly_focus: str = Query("all"),
-    review_focus: str = Query("all"),
+    graph_mode: str = Query("totals"),
+    line_category: str = Query(""),
+    window_scale: int = Query(2),
+    pie_categories: list[str] = Query(default=[]),
     message: Optional[str] = Query(None),
 ) -> HTMLResponse:
     auth_redirect = require_auth(request)
@@ -578,11 +753,10 @@ def dashboard(
         start,
         end,
         selected_year,
-        transaction_view,
-        income_focus,
-        expense_focus,
-        monthly_focus,
-        review_focus,
+        graph_mode,
+        line_category,
+        window_scale,
+        pie_categories,
         message,
     )
     return templates.TemplateResponse("dashboard.html", context)
@@ -594,6 +768,14 @@ def files_page(request: Request, message: Optional[str] = Query(None)) -> HTMLRe
     if auth_redirect:
         return auth_redirect
     return templates.TemplateResponse("files.html", files_context(request, message))
+
+
+@app.get("/rules", response_class=HTMLResponse)
+def rules_page(request: Request, message: Optional[str] = Query(None)) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    return templates.TemplateResponse("rules.html", rules_context(request, message))
 
 
 @app.post("/upload/{source_key}")
@@ -682,8 +864,10 @@ def export_transactions(
     start: str = Query(""),
     end: str = Query(""),
     selected_year: int = Query(date.today().year),
-    transaction_view: str = Query("All"),
-    review_focus: str = Query("all"),
+    graph_mode: str = Query("totals"),
+    line_category: str = Query(""),
+    window_scale: int = Query(2),
+    pie_categories: list[str] = Query(default=[]),
 ) -> StreamingResponse:
     auth_redirect = require_auth(request)
     if auth_redirect:
@@ -692,9 +876,17 @@ def export_transactions(
     start_date, end_date = period_range(period, start, end, selected_year)
     filtered_income = filter_frame(bundle.income, start_date, end_date)
     filtered_expenses = filter_frame(bundle.expenses, start_date, end_date)
-    income_frame = apply_focus(filtered_income, review_focus if review_focus in INCOME_CATEGORIES else "all")
-    expense_frame = apply_focus(filtered_expenses, review_focus if review_focus in EXPENSE_CATEGORIES else "all")
-    frame = frame_for_view(bundle, income_frame, expense_frame, transaction_view, start_date, end_date).copy()
+    if graph_mode == "category" and line_category:
+        income_frame = apply_focus(filtered_income, line_category if line_category in INCOME_CATEGORIES else "all")
+        expense_frame = apply_focus(filtered_expenses, line_category if line_category in EXPENSE_CATEGORIES else "all")
+    elif graph_mode == "pie" and pie_categories:
+        allowed = requested_categories(pie_categories)
+        income_frame = filtered_income[filtered_income["category"].isin(allowed)]
+        expense_frame = filtered_expenses[filtered_expenses["category"].isin(allowed)]
+    else:
+        income_frame = filtered_income
+        expense_frame = filtered_expenses
+    frame = frame_for_view(bundle, income_frame, expense_frame, "All", start_date, end_date).copy()
     if not frame.empty:
         frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
     csv_bytes = frame.to_csv(index=False).encode("utf-8")

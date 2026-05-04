@@ -1,291 +1,215 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% if show_upload_prompt %}
-<section class="banner warning compact-banner">
-  Missing source CSVs: {{ missing_sources | join(", ") }}. Use the Files page to upload them.
-</section>
-{% endif %}
-
-<section class="hero-grid">
-  <article class="panel filter-card">
-    <div class="panel-head tight">
-      <h2>Date Filter</h2>
+<section class="dashboard-shell">
+  <div class="dashboard-header">
+    <div>
+      <h2 class="page-title">MUUC Finance</h2>
+      <div class="source-pill-row">
+        {% for source in source_rows %}
+        <div class="source-pill">
+          <span>{{ source.label }}</span>
+          <strong>{{ source.latest if source.exists else 'not uploaded' }}</strong>
+        </div>
+        {% endfor %}
+      </div>
     </div>
-    <form method="get" action="/dashboard" class="minimal-filter-form">
-      <input type="hidden" name="transaction_view" value="{{ transaction_view }}">
-      <input type="hidden" name="income_focus" value="{{ income_focus }}">
-      <input type="hidden" name="expense_focus" value="{{ expense_focus }}">
-      <input type="hidden" name="monthly_focus" value="{{ monthly_focus }}">
-      <input type="hidden" name="review_focus" value="{{ review_focus }}">
+  </div>
 
-      <div class="field">
+  {% if show_upload_prompt %}
+  <section class="banner warning compact-banner">
+    Missing source CSVs: {{ missing_sources | join(", ") }}. Use File Upload to add them.
+  </section>
+  {% endif %}
+
+  <section class="top-grid">
+    <article class="panel compact-filter-card">
+      <form method="get" action="/dashboard" class="filter-stack">
+        <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
+        <input type="hidden" name="line_category" value="{{ line_category }}">
+        <input type="hidden" name="window_scale" value="{{ window_scale }}">
+        {% for category in pie_categories_selected %}
+        <input type="hidden" name="pie_categories" value="{{ category }}">
+        {% endfor %}
+
         <select id="period" name="period" onchange="document.getElementById('custom-dates').style.display = this.value === 'Custom' ? 'grid' : 'none'">
           {% for option in period_options %}
           <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
           {% endfor %}
         </select>
-      </div>
 
-      <div id="custom-dates" class="field-row compact" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
-        <div class="field">
+        <div id="custom-dates" class="field-row compact" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
           <input id="start" name="start" type="date" value="{{ start }}">
-        </div>
-        <div class="field">
           <input id="end" name="end" type="date" value="{{ end }}">
         </div>
-      </div>
 
-      <div class="field">
         <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
-      </div>
 
-      <div class="field">
-        <select id="transaction_view" name="transaction_view">
-          {% for option in transaction_views %}
-          <option value="{{ option }}" {% if option == transaction_view %}selected{% endif %}>{{ option }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div class="actions">
         <button type="submit">Apply</button>
-      </div>
-    </form>
-  </article>
+      </form>
+    </article>
 
-  <article class="panel utility-card">
-    <div class="utility-copy">
-      <div class="eyebrow">Data Management</div>
-      <h2>Files</h2>
-      <p class="muted">Upload source CSVs and rule tables from a separate page.</p>
-    </div>
-    <a class="pill-link" href="/files">Open Files</a>
-  </article>
-</section>
-
-<section class="summary-grid stripe-summary">
-  <article class="metric-card primary">
-    <span>Income</span>
-    <strong>{{ income_total }}</strong>
-  </article>
-  <article class="metric-card primary">
-    <span>Expenses</span>
-    <strong>{{ expense_total }}</strong>
-  </article>
-  <article class="metric-card">
-    <span>Net</span>
-    <strong>{{ net_total }}</strong>
-  </article>
-  <article class="metric-card">
-    <span>Misc Review</span>
-    <strong>{{ misc_count }}</strong>
-  </article>
-</section>
-
-<section class="chart-grid stripe-cards">
-  <article class="panel insight-card">
-    <div class="panel-head tight">
-      <h2>Income Breakdown</h2>
-      <div class="mini-pills">
-        <a href="{{ income_focus_links['all'] }}" class="mini-pill{% if income_focus == 'all' %} active{% endif %}">All</a>
-        {% for category in income_categories %}
-        <a href="{{ income_focus_links[category] }}" class="mini-pill{% if income_focus == category %} active{% endif %}">{{ category }}</a>
-        {% endfor %}
-      </div>
-    </div>
-    {% if income_rows %}
-    <div class="bar-list">
-      {% for row in income_rows %}
-      <div class="bar-item">
-        <div class="bar-meta">
-          <span>{{ row.category }}</span>
-          <span>{{ row.amount_label }} ({{ "%.1f"|format(row.share_pct) }}%)</span>
+    <article class="panel chart-card">
+      <div class="panel-head chart-head">
+        <div class="mode-pills">
+          <a href="{{ graph_mode_links['totals'] }}" class="nav-pill{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
+          <a href="{{ graph_mode_links['category'] }}" class="nav-pill{% if graph_mode == 'category' %} active{% endif %}">By Category</a>
+          <a href="{{ graph_mode_links['pie'] }}" class="nav-pill{% if graph_mode == 'pie' %} active{% endif %}">Pie Breakdown</a>
         </div>
-        <div class="bar-track">
-          <div class="bar-fill income" style="width: {{ row.width_pct }}%;"></div>
+        <div class="chart-title-block">
+          <h3>{{ chart_title }}</h3>
+          <span>{{ window_label }} window</span>
         </div>
       </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="muted">No income rows match the current filters.</p>
-    {% endif %}
-  </article>
 
-  <article class="panel insight-card">
-    <div class="panel-head tight">
-      <h2>Expense Breakdown</h2>
-      <div class="mini-pills">
-        <a href="{{ expense_focus_links['all'] }}" class="mini-pill{% if expense_focus == 'all' %} active{% endif %}">All</a>
-        {% for category in expense_categories %}
-        <a href="{{ expense_focus_links[category] }}" class="mini-pill{% if expense_focus == category %} active{% endif %}">{{ category }}</a>
-        {% endfor %}
-      </div>
-    </div>
-    {% if expense_rows %}
-    <div class="bar-list">
-      {% for row in expense_rows %}
-      <div class="bar-item">
-        <div class="bar-meta">
-          <span>{{ row.category }}</span>
-          <span>{{ row.amount_label }} ({{ "%.1f"|format(row.share_pct) }}%)</span>
-        </div>
-        <div class="bar-track">
-          <div class="bar-fill expense" style="width: {{ row.width_pct }}%;"></div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="muted">No expense rows match the current filters.</p>
-    {% endif %}
-  </article>
-</section>
+      <form method="get" action="/dashboard" class="chart-controls">
+        <input type="hidden" name="period" value="{{ period }}">
+        <input type="hidden" name="start" value="{{ start }}">
+        <input type="hidden" name="end" value="{{ end }}">
+        <input type="hidden" name="selected_year" value="{{ selected_year }}">
+        <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
 
-<section class="panel full-width-card">
-  <div class="panel-head tight">
-    <h2>Monthly Flow</h2>
-    <div class="mini-pills">
-      <a href="{{ monthly_focus_links['all'] }}" class="mini-pill{% if monthly_focus == 'all' %} active{% endif %}">All</a>
-      {% for category in combined_categories %}
-      <a href="{{ monthly_focus_links[category] }}" class="mini-pill{% if monthly_focus == category %} active{% endif %}">{{ category }}</a>
-      {% endfor %}
-    </div>
-  </div>
-  {% if monthly_rows %}
-  <div class="monthly-table">
-    {% for row in monthly_rows %}
-    <div class="monthly-row">
-      <div class="monthly-label">{{ row.month }}</div>
-      <div class="monthly-bars">
-        <div class="monthly-bar-wrap">
-          <span>Income {{ row.income }}</span>
-          <div class="bar-track"><div class="bar-fill income" style="width: {{ row.income_width }}%;"></div></div>
+        <div class="window-control">
+          <label for="window_scale">Window</label>
+          <input
+            id="window_scale"
+            type="range"
+            min="0"
+            max="3"
+            name="window_scale"
+            value="{{ window_scale }}"
+            oninput="document.getElementById('window-label').textContent = ['Day','Week','Month','Year'][this.value]"
+          >
+          <span id="window-label">{{ window_label }}</span>
         </div>
-        <div class="monthly-bar-wrap">
-          <span>Expenses {{ row.expenses }}</span>
-          <div class="bar-track"><div class="bar-fill expense" style="width: {{ row.expense_width }}%;"></div></div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="muted">No monthly data in the selected range.</p>
-  {% endif %}
-</section>
 
-<section class="table-grid stripe-cards">
-  <article class="panel">
-    <div class="panel-head tight">
-      <h2>Income Transactions</h2>
-      <div class="mini-pills">
-        <a href="{{ review_focus_links['all'] }}" class="mini-pill{% if review_focus == 'all' %} active{% endif %}">All</a>
-        {% for category in income_categories %}
-        <a href="{{ review_focus_links[category] }}" class="mini-pill{% if review_focus == category %} active{% endif %}">{{ category }}</a>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Category</th>
-            <th>Identifier</th>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in income_transactions %}
-          <tr>
-            <td>{{ row.date }}</td>
-            <td>{{ row.category }}</td>
-            <td>{{ row.identifier }}</td>
-            <td>{{ row.name }}</td>
-            <td>{{ row.email }}</td>
-            <td class="amount">{{ row.amount }}</td>
-          </tr>
+        <div class="period-control">
+          <label for="period_repeat">Range</label>
+          <select id="period_repeat" name="period">
+            {% for option in period_options %}
+            <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {% if graph_mode == 'category' %}
+        <div class="category-select">
+          <label for="line_category">Category</label>
+          <select id="line_category" name="line_category">
+            {% for category in all_categories %}
+            <option value="{{ category }}" {% if category == line_category %}selected{% endif %}>{{ category }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% else %}
+        <input type="hidden" name="line_category" value="{{ line_category }}">
+        {% endif %}
+
+        {% if graph_mode == 'pie' %}
+        <div class="pie-filter-pills">
+          {% for category in all_categories %}
+          <label class="mini-pill check-pill{% if category in pie_categories_selected %} active{% endif %}">
+            <input type="checkbox" name="pie_categories" value="{{ category }}" {% if category in pie_categories_selected %}checked{% endif %}>
+            <span>{{ category }}</span>
+          </label>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </article>
+        </div>
+        {% else %}
+          {% for category in pie_categories_selected %}
+          <input type="hidden" name="pie_categories" value="{{ category }}">
+          {% endfor %}
+        {% endif %}
 
-  <article class="panel">
-    <div class="panel-head tight">
-      <h2>Expense Transactions</h2>
-      <div class="mini-pills">
-        <a href="{{ review_focus_links['all'] }}" class="mini-pill{% if review_focus == 'all' %} active{% endif %}">All</a>
-        {% for category in expense_categories %}
-        <a href="{{ review_focus_links[category] }}" class="mini-pill{% if review_focus == category %} active{% endif %}">{{ category }}</a>
+        <button type="submit">Update Chart</button>
+      </form>
+
+      <div class="chart-frame">
+        {{ chart_svg | safe }}
+      </div>
+      {{ chart_tooltip_script | safe }}
+    </article>
+  </section>
+
+  <section class="summary-grid fresh-summary">
+    <article class="metric-card primary"><span>Total Income</span><strong>{{ income_total }}</strong></article>
+    <article class="metric-card primary"><span>Total Expenses</span><strong>{{ expense_total }}</strong></article>
+    <article class="metric-card"><span>Net</span><strong>{{ net_total }}</strong></article>
+    <article class="metric-card"><span>Misc Review</span><strong>{{ misc_count }}</strong></article>
+  </section>
+
+  <section class="lower-grid">
+    <article class="panel">
+      <div class="panel-head tight"><h2>Income Breakdown</h2></div>
+      {% if income_rows %}
+      <div class="bar-list">
+        {% for row in income_rows %}
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span>{{ row.category }}</span>
+            <span>{{ row.amount_label }}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill income" style="width: {{ row.width_pct }}%;"></div></div>
+        </div>
         {% endfor %}
       </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Category</th>
-            <th>Identifier</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in expense_transactions %}
-          <tr>
-            <td>{{ row.date }}</td>
-            <td>{{ row.category }}</td>
-            <td>{{ row.identifier }}</td>
-            <td class="amount">{{ row.amount }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </article>
-</section>
+      {% else %}
+      <p class="muted">No income data in range.</p>
+      {% endif %}
+    </article>
 
-<section class="panel full-width-card">
-  <div class="panel-head tight">
-    <h2>Review</h2>
-    <div class="actions">
+    <article class="panel">
+      <div class="panel-head tight"><h2>Expense Breakdown</h2></div>
+      {% if expense_rows %}
+      <div class="bar-list">
+        {% for row in expense_rows %}
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span>{{ row.category }}</span>
+            <span>{{ row.amount_label }}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill expense" style="width: {{ row.width_pct }}%;"></div></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted">No expense data in range.</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head tight">
+      <h2>Recent Transactions</h2>
       <a class="ghost-link" href="/transactions/export?{{ export_query }}">Export</a>
     </div>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Source</th>
-          <th>Category</th>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Matched</th>
-          <th>Description</th>
-          <th>Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in review_transactions %}
-        <tr>
-          <td>{{ row.date }}</td>
-          <td>{{ row.source }}</td>
-          <td>{{ row.category }}</td>
-          <td>{{ row.name }}</td>
-          <td>{{ row.email }}</td>
-          <td>{{ row.matched }}</td>
-          <td>{{ row.identifier }}</td>
-          <td class="amount">{{ row.amount }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Source</th>
+            <th>Category</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Description</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in recent_transactions %}
+          <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.source }}</td>
+            <td>{{ row.category }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.email }}</td>
+            <td>{{ row.identifier }}</td>
+            <td class="amount">{{ row.amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </section>
 {% endblock %}

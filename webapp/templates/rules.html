@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <div class="panel-head tight">
+    <h2>Rules</h2>
+  </div>
+  <div class="source-grid files-grid">
+    {% for rule in rule_rows %}
+    <article class="source-card">
+      <div>
+        <div class="eyebrow">{{ rule.label }}</div>
+        <div class="source-path">{{ rule.path }}</div>
+        <div class="muted">{{ rule.rows }} rows</div>
+      </div>
+      <div class="source-actions">
+        <a class="ghost-link" href="/download/rules/{{ rule.key }}">Download Current</a>
+        <form method="post" action="/upload/rules/{{ rule.key }}" enctype="multipart/form-data" class="upload-form">
+          <input type="file" name="file" accept=".csv" required>
+          <button type="submit">Upload Replacement</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
