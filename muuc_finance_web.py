@@ -453,6 +453,19 @@ def format_bucket_label(bucket: str, window_key: str) -> str:
     return str(bucket)
 
 
+def format_axis_tick_label(bucket: str, window_key: str) -> str:
+    try:
+        if window_key in {"day", "week", "month"}:
+            if window_key == "week":
+                bucket = str(bucket).split("/")[0]
+            return pd.to_datetime(bucket, errors="raise").strftime("%b %Y")
+        if window_key == "year":
+            return pd.to_datetime(f"{bucket}-01-01", errors="raise").strftime("%Y")
+    except Exception:
+        return str(bucket)
+    return str(bucket)
+
+
 def bucket_year_label(bucket: str, window_key: str) -> str:
     try:
         if window_key == "day":
@@ -467,6 +480,38 @@ def bucket_year_label(bucket: str, window_key: str) -> str:
     except Exception:
         return str(bucket)[:4]
     return str(bucket)[:4]
+
+
+def visible_tick_indices(labels: list[str], window_key: str) -> set[int]:
+    count = len(labels)
+    if count <= 1:
+        return {0} if count == 1 else set()
+
+    if window_key in {"day", "week"}:
+        visible: set[int] = set()
+        last_marker = None
+        for index, label in enumerate(labels):
+            marker = format_axis_tick_label(label, window_key)
+            if marker != last_marker:
+                visible.add(index)
+                last_marker = marker
+        visible.add(count - 1)
+        return visible
+    elif window_key == "month":
+        target = 12
+    elif window_key == "year":
+        target = count
+    elif window_key == "month":
+        target = 12
+
+    if count <= target:
+        return set(range(count))
+
+    step = max((count + target - 1) // target, 1)
+    visible = set(range(0, count, step))
+    visible.add(0)
+    visible.add(count - 1)
+    return visible
 
 
 def svg_tooltip_script() -> str:
@@ -532,9 +577,12 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
         parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
 
     x_step = plot_width / max(len(labels) - 1, 1)
+    visible_indices = visible_tick_indices(labels, window_key)
     for index, label in enumerate(labels):
+        if index not in visible_indices:
+            continue
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
-        display_label = format_bucket_label(label, window_key)
+        display_label = format_axis_tick_label(label, window_key)
         parts.append(
             f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
@@ -630,10 +678,13 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
         parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
         parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
 
+    visible_indices = visible_tick_indices(labels, window_key)
     for index, label in enumerate(labels):
+        if index not in visible_indices:
+            continue
         group_start = margin_left + (index * group_width)
         center_x = group_start + group_width / 2
-        display_label = format_bucket_label(label, window_key)
+        display_label = format_axis_tick_label(label, window_key)
         parts.append(
             f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
@@ -734,10 +785,14 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
             tooltip = f"{series_name} | {label} | {currency(value)}"
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
 
+    visible_indices = visible_tick_indices(labels, "year")
     for index, label in enumerate(labels):
+        if index not in visible_indices:
+            continue
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
+        display_label = format_axis_tick_label(label, "year")
         parts.append(
-            f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(str(label))}</text>'
+            f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
 
     add_series("Income", income_totals)
@@ -875,10 +930,13 @@ def build_time_stacked_category_bar_svg(
         parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
         parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
 
+    visible_indices = visible_tick_indices(labels, window_key)
     for index, label in enumerate(labels):
+        if index not in visible_indices:
+            continue
         group_start = margin_left + (index * group_width)
         center_x = group_start + group_width / 2
-        display_label = format_bucket_label(label, window_key)
+        display_label = format_axis_tick_label(label, window_key)
         parts.append(
             f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
