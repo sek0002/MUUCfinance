@@ -495,11 +495,11 @@ def svg_tooltip_script() -> str:
 
 def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
     width = 1160
-    height = 360
+    height = 500
     margin_left = 64
     margin_right = 32
     margin_top = 42
-    margin_bottom = 58
+    margin_bottom = 84
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -589,11 +589,11 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
 
 def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
     width = 1160
-    height = 360
+    height = 500
     margin_left = 64
     margin_right = 32
     margin_top = 42
-    margin_bottom = 58
+    margin_bottom = 84
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -684,11 +684,11 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
 
 def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_totals: pd.Series, title: str) -> str:
     width = 1160
-    height = 360
+    height = 500
     margin_left = 64
     margin_right = 32
     margin_top = 42
-    margin_bottom = 58
+    margin_bottom = 84
     colors = {"Income": "#00a67e", "Expenses": "#db5b7b"}
     labels = list(dict.fromkeys(list(income_totals.index) + list(expense_totals.index)))
     if not labels:
@@ -754,11 +754,11 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
 
 def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.Series, title: str) -> str:
     width = 1160
-    height = 360
+    height = 500
     margin_left = 64
     margin_right = 32
     margin_top = 42
-    margin_bottom = 58
+    margin_bottom = 84
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
     income_segments = [(label, float(income_totals.get(label, 0.0))) for label in income_totals.index.tolist() if float(income_totals.get(label, 0.0)) > 0]
@@ -828,11 +828,11 @@ def build_time_stacked_category_bar_svg(
     window_key: str,
 ) -> str:
     width = 1160
-    height = 360
+    height = 500
     margin_left = 64
     margin_right = 32
     margin_top = 42
-    margin_bottom = 58
+    margin_bottom = 84
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
     labels = []

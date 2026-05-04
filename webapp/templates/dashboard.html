@@ -92,36 +92,32 @@
         <input type="hidden" name="chart_style" value="{{ chart_style }}">
         {% endif %}
 
-        <div class="mode-pills compact-pills">
-          <a href="{{ graph_mode_links['totals'] }}" class="nav-pill compact-pill{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
-          <a href="{{ graph_mode_links['category'] }}" class="nav-pill compact-pill{% if graph_mode == 'category' %} active{% endif %}">By Category</a>
-          <a href="{{ graph_mode_links['pie'] }}" class="nav-pill compact-pill{% if graph_mode == 'pie' %} active{% endif %}">Pie Breakdown</a>
+        <div class="mode-toggle" data-active="{{ graph_mode }}" role="tablist" aria-label="Chart mode">
+          <a href="{{ graph_mode_links['totals'] }}" class="mode-toggle-option{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
+          <a href="{{ graph_mode_links['category'] }}" class="mode-toggle-option{% if graph_mode == 'category' %} active{% endif %}">Category</a>
+          <a href="{{ graph_mode_links['pie'] }}" class="mode-toggle-option{% if graph_mode == 'pie' %} active{% endif %}">Pie</a>
         </div>
 
         {% if graph_mode != 'pie' %}
         <div class="category-select">
           <label>Plot</label>
           <input type="hidden" id="chart_style" name="chart_style" value="{{ chart_style }}">
-          <div class="mode-pills compact-pills plot-toggle" role="tablist" aria-label="Plot style">
-            <button type="button" class="nav-pill compact-pill{% if chart_style == 'line' %} active{% endif %}" data-chart-style="line">Line</button>
-            <button type="button" class="nav-pill compact-pill{% if chart_style == 'bar' %} active{% endif %}" data-chart-style="bar">Bar</button>
+          <div class="plot-toggle" data-active="{{ chart_style }}" role="tablist" aria-label="Plot style">
+            <button type="button" class="plot-toggle-option{% if chart_style == 'line' %} active{% endif %}" data-chart-style="line">Line</button>
+            <button type="button" class="plot-toggle-option{% if chart_style == 'bar' %} active{% endif %}" data-chart-style="bar">Bar</button>
           </div>
         </div>
         {% endif %}
 
         <div class="window-control">
-          <label for="window_scale">Window</label>
-          <input
-            id="window_scale"
-            type="range"
-            min="0"
-            max="3"
-            name="window_scale"
-            value="{{ window_scale }}"
-            data-auto-submit="input"
-            oninput="document.getElementById('window-label').textContent = ['Day','Week','Month','Year'][this.value]"
-          >
-          <span id="window-label">{{ window_label }}</span>
+          <label>Window</label>
+          <input type="hidden" id="window_scale" name="window_scale" value="{{ window_scale }}">
+          <div class="window-toggle" data-active="{{ window_scale }}" role="tablist" aria-label="Window size">
+            <button type="button" class="window-toggle-option{% if window_scale == 0 %} active{% endif %}" data-window-scale="0">Day</button>
+            <button type="button" class="window-toggle-option{% if window_scale == 1 %} active{% endif %}" data-window-scale="1">Week</button>
+            <button type="button" class="window-toggle-option{% if window_scale == 2 %} active{% endif %}" data-window-scale="2">Month</button>
+            <button type="button" class="window-toggle-option{% if window_scale == 3 %} active{% endif %}" data-window-scale="3">Year</button>
+          </div>
         </div>
 
         {% if graph_mode == 'category' %}
@@ -271,7 +267,26 @@
               const styleInput = document.getElementById("chart_style");
               if (!styleInput) return;
               styleInput.value = button.dataset.chartStyle;
+              const toggle = button.closest(".plot-toggle");
+              if (toggle) {
+                toggle.dataset.active = button.dataset.chartStyle || "";
+              }
               form.querySelectorAll("[data-chart-style]").forEach(function (other) {
+                other.classList.toggle("active", other === button);
+              });
+              submitSoon(0);
+            });
+          });
+          form.querySelectorAll("[data-window-scale]").forEach(function (button) {
+            button.addEventListener("click", function () {
+              const scaleInput = document.getElementById("window_scale");
+              if (!scaleInput) return;
+              scaleInput.value = button.dataset.windowScale || "0";
+              const toggle = button.closest(".window-toggle");
+              if (toggle) {
+                toggle.dataset.active = scaleInput.value;
+              }
+              form.querySelectorAll("[data-window-scale]").forEach(function (other) {
                 other.classList.toggle("active", other === button);
               });
               submitSoon(0);

@@ -426,16 +426,6 @@ button {
   color: var(--muted);
 }
 
-.window-control input[type="range"] {
-  margin: 0;
-}
-
-.window-control span {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
 .chart-title-inline {
   min-width: 0;
   justify-self: end;
@@ -455,20 +445,165 @@ button {
   font-size: 0.82rem;
 }
 
-.plot-toggle {
-  gap: 6px;
+.mode-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-soft) 88%, var(--panel) 12%);
+  overflow: hidden;
 }
 
-.plot-toggle .nav-pill {
+.mode-toggle::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(33.333% - 2px);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 82%, white 18%) 100%);
+  box-shadow: 0 8px 18px rgba(99, 91, 255, 0.2);
+  transition: transform 180ms ease;
+}
+
+.mode-toggle[data-active="category"]::before {
+  transform: translateX(100%);
+}
+
+.mode-toggle[data-active="pie"]::before {
+  transform: translateX(200%);
+}
+
+.mode-toggle-option {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 180ms ease;
+}
+
+.mode-toggle-option.active {
+  color: #fff;
+}
+
+.plot-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 0;
+  padding: 3px;
   border: 1px solid var(--line);
-  background: var(--panel-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-soft) 88%, var(--panel) 12%);
+  overflow: hidden;
+}
+
+.plot-toggle::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 82%, white 18%) 100%);
+  box-shadow: 0 8px 18px rgba(99, 91, 255, 0.2);
+  transition: transform 180ms ease;
+}
+
+.plot-toggle[data-active="bar"]::before {
+  transform: translateX(100%);
+}
+
+.plot-toggle-option {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: color 180ms ease;
 }
 
-.plot-toggle .nav-pill.active {
+.plot-toggle-option.active {
   color: #fff;
-  border-color: transparent;
+}
+
+.window-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-soft) 88%, var(--panel) 12%);
+  overflow: hidden;
+}
+
+.window-toggle::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(25% - 2px);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 82%, white 18%) 100%);
+  box-shadow: 0 8px 18px rgba(99, 91, 255, 0.2);
+  transition: transform 180ms ease;
+}
+
+.window-toggle[data-active="1"]::before {
+  transform: translateX(100%);
+}
+
+.window-toggle[data-active="2"]::before {
+  transform: translateX(200%);
+}
+
+.window-toggle[data-active="3"]::before {
+  transform: translateX(300%);
+}
+
+.window-toggle-option {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: center;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 180ms ease;
+}
+
+.window-toggle-option.active {
+  color: #fff;
 }
 
 .filter-menu-dropdown {
