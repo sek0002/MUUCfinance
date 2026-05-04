@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+build/
+dist/
+
+source/*.csv
+source/old/
+source/.DS_Store
+
+.env

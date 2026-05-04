@@ -46,6 +46,45 @@ For a terminal-only summary check:
 python3 muuc_finance_app.py --summary
 ```
 
+## Run the hosted web app
+
+The repo also includes a FastAPI-hosted version with username/password plus authenticator-app login.
+
+1. Generate a TOTP secret and provisioning URI:
+
+```bash
+python3 muuc_finance_web.py --init-auth
+```
+
+2. Set the required environment variables:
+
+```bash
+export MUUC_WEB_USERNAME="sek0002"
+export MUUC_WEB_PASSWORD="choose-a-strong-password"
+export MUUC_TOTP_SECRET="paste-secret-from-init-auth"
+export MUUC_SESSION_SECRET="choose-a-long-random-session-secret"
+```
+
+3. Start the server:
+
+```bash
+python3 muuc_finance_web.py --host 0.0.0.0 --port 8000
+```
+
+For development with auto-reload:
+
+```bash
+python3 muuc_finance_web.py --host 127.0.0.1 --port 8000 --reload
+```
+
+The hosted app lets you:
+
+- sign in with password plus 6-digit TOTP code from an authenticator app
+- upload replacement `stripe.csv`, `teamapp.csv`, and `everyday.csv`
+- download the current source CSVs
+- apply the same date and category filters
+- export the filtered transactions table as CSV
+
 ## Build standalone apps
 
 macOS:

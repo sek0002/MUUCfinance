@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <form method="get" action="/dashboard" class="filters">
+    <div class="field wide">
+      <label for="period">Period</label>
+      <select id="period" name="period" onchange="document.getElementById('custom-dates').style.display = this.value === 'Custom' ? 'grid' : 'none'">
+        {% for option in period_options %}
+        <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="custom-dates" class="field-row" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
+      <div class="field">
+        <label for="start">Start</label>
+        <input id="start" name="start" type="date" value="{{ start }}">
+      </div>
+      <div class="field">
+        <label for="end">End</label>
+        <input id="end" name="end" type="date" value="{{ end }}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="selected_year">Selected Year</label>
+      <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
+    </div>
+
+    <div class="field">
+      <label for="transaction_view">Transaction View</label>
+      <select id="transaction_view" name="transaction_view">
+        {% for option in transaction_views %}
+        <option value="{{ option }}" {% if option == transaction_view %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field full">
+      <label>Categories</label>
+      <div class="pill-grid">
+        {% for category in all_categories %}
+        <label class="pill">
+          <input type="checkbox" name="categories" value="{{ category }}" {% if category in selected_categories %}checked{% endif %}>
+          <span>{{ category }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="actions full">
+      <button type="submit">Apply Filters</button>
+      <a class="ghost-link" href="/transactions/export?{{ export_query }}">Export Transactions</a>
+    </div>
+  </form>
+</section>
+
+<section class="source-grid">
+  {% for source in source_rows %}
+  <article class="source-card">
+    <div>
+      <div class="eyebrow">{{ source.label }}</div>
+      <div class="source-path">{{ source.path }}</div>
+      <div class="muted">{{ source.latest }}</div>
+    </div>
+    <div class="source-actions">
+      <a class="ghost-link" href="/download/source/{{ source.key }}">Download Current</a>
+      <form method="post" action="/upload/{{ source.key }}" enctype="multipart/form-data" class="upload-form">
+        <input type="file" name="file" accept=".csv" required>
+        <button type="submit">Upload Replacement</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+
+<section class="summary-grid">
+  <article class="metric-card">
+    <span>Income</span>
+    <strong>{{ income_total }}</strong>
+  </article>
+  <article class="metric-card">
+    <span>Expenses</span>
+    <strong>{{ expense_total }}</strong>
+  </article>
+  <article class="metric-card">
+    <span>Net</span>
+    <strong>{{ net_total }}</strong>
+  </article>
+  <article class="metric-card">
+    <span>Misc Review</span>
+    <strong>{{ misc_count }}</strong>
+  </article>
+</section>
+
+<section class="chart-grid">
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Income by Category</h2>
+    </div>
+    {% if income_rows %}
+    <div class="bar-list">
+      {% for row in income_rows %}
+      <div class="bar-item">
+        <div class="bar-meta">
+          <span>{{ row.category }}</span>
+          <span>{{ row.amount_label }} ({{ "%.1f"|format(row.share_pct) }}%)</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill income" style="width: {{ row.width_pct }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No income rows match the current filters.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Expenses by Category</h2>
+    </div>
+    {% if expense_rows %}
+    <div class="bar-list">
+      {% for row in expense_rows %}
+      <div class="bar-item">
+        <div class="bar-meta">
+          <span>{{ row.category }}</span>
+          <span>{{ row.amount_label }} ({{ "%.1f"|format(row.share_pct) }}%)</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill expense" style="width: {{ row.width_pct }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No expense rows match the current filters.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Monthly Breakdown</h2>
+  </div>
+  {% if monthly_rows %}
+  <div class="monthly-table">
+    {% for row in monthly_rows %}
+    <div class="monthly-row">
+      <div class="monthly-label">{{ row.month }}</div>
+      <div class="monthly-bars">
+        <div class="monthly-bar-wrap">
+          <span>Income {{ row.income }}</span>
+          <div class="bar-track"><div class="bar-fill income" style="width: {{ row.income_width }}%;"></div></div>
+        </div>
+        <div class="monthly-bar-wrap">
+          <span>Expenses {{ row.expenses }}</span>
+          <div class="bar-track"><div class="bar-fill expense" style="width: {{ row.expense_width }}%;"></div></div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No monthly data in the selected range.</p>
+  {% endif %}
+</section>
+
+<section class="table-grid">
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Filtered Income</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Identifier</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in income_transactions %}
+          <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.category }}</td>
+            <td>{{ row.identifier }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.email }}</td>
+            <td class="amount">{{ row.amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Filtered Expenses</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Identifier</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in expense_transactions %}
+          <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.category }}</td>
+            <td>{{ row.identifier }}</td>
+            <td class="amount">{{ row.amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Transaction Review</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Source</th>
+          <th>Category</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Matched</th>
+          <th>Description</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in review_transactions %}
+        <tr>
+          <td>{{ row.date }}</td>
+          <td>{{ row.source }}</td>
+          <td>{{ row.category }}</td>
+          <td>{{ row.name }}</td>
+          <td>{{ row.email }}</td>
+          <td>{{ row.matched }}</td>
+          <td>{{ row.identifier }}</td>
+          <td class="amount">{{ row.amount }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

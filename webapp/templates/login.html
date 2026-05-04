@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="login-card">
+  <div class="login-copy">
+    <div class="eyebrow">Hosted Access</div>
+    <h2>Sign in with password and authenticator code</h2>
+    <p>Use the configured username, your web password, and the current 6-digit code from your authenticator app.</p>
+    <p class="muted">Configured username: <strong>{{ configured_username }}</strong></p>
+  </div>
+
+  <form method="post" action="/login" class="login-form">
+    <label>
+      <span>Username</span>
+      <input type="text" name="username" required autocomplete="username">
+    </label>
+    <label>
+      <span>Password</span>
+      <input type="password" name="password" required autocomplete="current-password">
+    </label>
+    <label>
+      <span>Authenticator Code</span>
+      <input type="text" name="totp_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code">
+    </label>
+    <button type="submit">Sign In</button>
+  </form>
+</section>
+{% endblock %}

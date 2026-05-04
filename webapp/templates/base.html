@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">MUUC Finance</div>
+        <h1>{{ app_name }}</h1>
+      </div>
+      {% if request.session.get("authenticated") %}
+      <div class="topbar-actions">
+        <a class="ghost-link" href="/auth/setup">Authenticator Setup</a>
+        <form method="post" action="/logout">
+          <button type="submit" class="ghost-button">Sign Out</button>
+        </form>
+      </div>
+      {% endif %}
+    </header>
+
+    {% if auth_error %}
+    <section class="banner warning">{{ auth_error }}</section>
+    {% endif %}
+    {% if message %}
+    <section class="banner info">{{ message }}</section>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>
