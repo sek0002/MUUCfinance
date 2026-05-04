@@ -50,7 +50,7 @@ code, textarea, input, select, button { font: inherit; }
 
 .shell-login {
   min-height: 100vh;
-  width: min(100vw - 32px, 1260px);
+  width: min(100vw - 24px, 960px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -455,6 +455,22 @@ button {
   font-size: 0.82rem;
 }
 
+.plot-toggle {
+  gap: 6px;
+}
+
+.plot-toggle .nav-pill {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.plot-toggle .nav-pill.active {
+  color: #fff;
+  border-color: transparent;
+}
+
 .filter-menu-dropdown {
   position: relative;
 }
@@ -469,6 +485,11 @@ button {
   cursor: pointer;
   font-size: 0.92rem;
   white-space: nowrap;
+}
+
+:root[data-theme="dark"] .filter-menu-dropdown summary,
+:root[data-theme="dark"] .filter-check {
+  background: color-mix(in srgb, var(--panel-soft) 82%, var(--panel) 18%);
 }
 
 .filter-menu-dropdown summary::-webkit-details-marker {
@@ -509,7 +530,7 @@ button {
   gap: 8px;
   padding: 6px 8px;
   border-radius: 10px;
-  background: #f7faff;
+  background: color-mix(in srgb, var(--panel-soft) 84%, white 16%);
   font-size: 0.88rem;
 }
 
@@ -527,7 +548,7 @@ button {
   background: color-mix(in srgb, var(--panel-soft) 70%, var(--panel) 30%);
   border: 1px solid var(--line);
   padding: 6px 8px 8px;
-  min-height: 420px;
+  min-height: 520px;
   display: flex;
   align-items: stretch;
 }
@@ -542,12 +563,14 @@ button {
   grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
   gap: 12px;
   align-items: stretch;
+  min-height: 100%;
 }
 
 .chart-visual {
   min-width: 0;
   display: flex;
   align-items: stretch;
+  min-height: 100%;
 }
 
 .chart-detail-panel {
@@ -606,6 +629,7 @@ button {
   width: 100%;
   height: 100%;
   display: block;
+  flex: 1 1 auto;
 }
 
 .pie-svg {
@@ -613,7 +637,7 @@ button {
 }
 
 .line-svg {
-  min-height: 360px;
+  min-height: 100%;
 }
 
 .chart-title { fill: var(--text); font-size: 18px; font-weight: 600; }
@@ -797,8 +821,8 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-shell {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(420px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(2, minmax(340px, 1fr));
+  gap: 18px;
   align-items: stretch;
 }
 
@@ -832,11 +856,16 @@ td.amount { text-align: right; white-space: nowrap; }
 }
 
 .login-minimal-form input {
-  padding: 18px 20px;
+  padding: 16px 18px;
   text-align: center;
-  letter-spacing: 0.28em;
-  font-size: 1.45rem;
+  letter-spacing: 0.2em;
+  font-size: 1.2rem;
   border-radius: 16px;
+}
+
+.login-minimal-form input::placeholder {
+  font-size: 0.82em;
+  letter-spacing: 0.18em;
 }
 
 .login-minimal-form input.login-error {
@@ -854,7 +883,7 @@ td.amount { text-align: right; white-space: nowrap; }
 .stacked-login-form {
   grid-template-columns: 1fr;
   margin-top: 8px;
-  width: min(100%, 520px);
+  width: min(100%, 420px);
   align-self: end;
 }
 
@@ -880,7 +909,7 @@ td.amount { text-align: right; white-space: nowrap; }
   }
 
   .shell-login {
-    width: min(100vw - 16px, 640px);
+    width: min(100vw - 16px, 520px);
   }
 
   .topbar {

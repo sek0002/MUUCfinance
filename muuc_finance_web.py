@@ -442,7 +442,7 @@ def format_bucket_label(bucket: str, window_key: str) -> str:
             start_text = str(bucket).split("/")[0]
             return pd.to_datetime(start_text, errors="raise").strftime("%d-%m-%Y")
         if window_key == "month":
-            return pd.Period(bucket, freq="M").start_time.strftime("%d-%m-%Y")
+            return pd.Period(bucket, freq="M").start_time.strftime("%b %Y")
         if window_key == "year":
             dt = pd.to_datetime(f"{bucket}-01-01", errors="raise")
             return dt.strftime("%d-%m-%Y")
@@ -900,8 +900,18 @@ def build_time_stacked_category_bar_svg(
             parts.append(f'<rect x="{inset_x:.1f}" y="{inset_y:.1f}" width="{inset_width:.1f}" height="{inset_height}" rx="9" class="year-inset" />')
             parts.append(f'<text x="{(inset_x + inset_width / 2):.1f}" y="{inset_y + 12:.1f}" text-anchor="middle" class="year-inset-label">{html.escape(year)}</text>')
 
-    income_items = list(income_series_map.items())
-    expense_items = list(expense_series_map.items())
+    def category_name(series_name: str) -> str:
+        return series_name.split("·", 1)[1].strip() if "·" in series_name else series_name
+
+    category_order: list[str] = []
+    for series_name in list(income_series_map.keys()) + list(expense_series_map.keys()):
+        category = category_name(series_name)
+        if category not in category_order:
+            category_order.append(category)
+    color_map = {category: colors[idx % len(colors)] for idx, category in enumerate(category_order)}
+
+    income_items = [(category_name(name), series) for name, series in income_series_map.items()]
+    expense_items = [(category_name(name), series) for name, series in expense_series_map.items()]
 
     for label_index, label in enumerate(labels):
         group_start = margin_left + (label_index * group_width)
@@ -910,13 +920,13 @@ def build_time_stacked_category_bar_svg(
         expense_x = center_x + (pair_gap / 2)
 
         running_height = 0.0
-        for idx, (series_name, series) in enumerate(income_items):
+        for series_name, series in income_items:
             value = float(series.get(label, 0.0))
             if value <= 0:
                 continue
             segment_height = (value / max_value) * plot_height
             y = margin_top + plot_height - running_height - segment_height
-            color = colors[idx % len(colors)]
+            color = color_map.get(series_name, colors[0])
             tooltip = f"{series_name} | {label} | {currency(value)}"
             parts.append(
                 f'<rect x="{income_x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(segment_height, 1):.1f}" rx="4" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
@@ -924,26 +934,27 @@ def build_time_stacked_category_bar_svg(
             running_height += segment_height
 
         running_height = 0.0
-        for idx, (series_name, series) in enumerate(expense_items):
+        for series_name, series in expense_items:
             value = float(series.get(label, 0.0))
             if value <= 0:
                 continue
             segment_height = (value / max_value) * plot_height
             y = margin_top + plot_height - running_height - segment_height
-            color = colors[(idx + len(income_items)) % len(colors)]
+            color = color_map.get(series_name, colors[0])
             tooltip = f"{series_name} | {label} | {currency(value)}"
             parts.append(
                 f'<rect x="{expense_x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(segment_height, 1):.1f}" rx="4" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
             )
             running_height += segment_height
 
+        parts.append(f'<text x="{income_x + (bar_width / 2):.1f}" y="{margin_top + plot_height - 6:.1f}" text-anchor="middle" class="axis-label">I</text>')
+        parts.append(f'<text x="{expense_x + (bar_width / 2):.1f}" y="{margin_top + plot_height - 6:.1f}" text-anchor="middle" class="axis-label">E</text>')
+
     legend_x = width - margin_right - 220
     legend_x = max(legend_x, margin_left + 280)
     legend_y = 18
     legend_step = 18
-    legend_items = [(name, colors[idx % len(colors)]) for idx, (name, _series) in enumerate(income_items)] + [
-        (name, colors[(idx + len(income_items)) % len(colors)]) for idx, (name, _series) in enumerate(expense_items)
-    ]
+    legend_items = [(category, color_map[category]) for category in category_order]
     for idx, (label, color) in enumerate(legend_items):
         row_y = legend_y + (idx * legend_step)
         parts.append(f'<rect x="{legend_x}" y="{row_y - 8}" width="10" height="10" rx="2" fill="{color}" />')

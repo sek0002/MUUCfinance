@@ -100,11 +100,12 @@
 
         {% if graph_mode != 'pie' %}
         <div class="category-select">
-          <label for="chart_style">Plot</label>
-          <select id="chart_style" name="chart_style" data-auto-submit="change">
-            <option value="line" {% if chart_style == 'line' %}selected{% endif %}>Line</option>
-            <option value="bar" {% if chart_style == 'bar' %}selected{% endif %}>Bar</option>
-          </select>
+          <label>Plot</label>
+          <input type="hidden" id="chart_style" name="chart_style" value="{{ chart_style }}">
+          <div class="mode-pills compact-pills plot-toggle" role="tablist" aria-label="Plot style">
+            <button type="button" class="nav-pill compact-pill{% if chart_style == 'line' %} active{% endif %}" data-chart-style="line">Line</button>
+            <button type="button" class="nav-pill compact-pill{% if chart_style == 'bar' %} active{% endif %}" data-chart-style="bar">Bar</button>
+          </div>
         </div>
         {% endif %}
 
@@ -263,6 +264,17 @@
             });
             node.addEventListener("input", function () {
               submitSoon(180);
+            });
+          });
+          form.querySelectorAll("[data-chart-style]").forEach(function (button) {
+            button.addEventListener("click", function () {
+              const styleInput = document.getElementById("chart_style");
+              if (!styleInput) return;
+              styleInput.value = button.dataset.chartStyle;
+              form.querySelectorAll("[data-chart-style]").forEach(function (other) {
+                other.classList.toggle("active", other === button);
+              });
+              submitSoon(0);
             });
           });
 
