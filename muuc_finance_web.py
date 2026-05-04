@@ -27,13 +27,16 @@ from muuc_finance_app import (
     EXPENSE_CATEGORIES,
     INCOME_CATEGORIES,
     AnalysisBundle,
+    RUNTIME_DIR,
+    SETTINGS_DIR,
+    SOURCE_FILENAMES,
     currency,
-    default_file_paths,
-    ensure_user_rule_file,
     filter_frame,
     latest_entry_label,
+    load_rule_table,
     load_analysis,
     period_range,
+    save_rule_table,
     summarize_categories,
 )
 
@@ -43,6 +46,13 @@ WEB_DIR = BASE_DIR / "webapp"
 TEMPLATES_DIR = WEB_DIR / "templates"
 STATIC_DIR = WEB_DIR / "static"
 SOURCE_KEYS = ("stripe", "teamapp", "everyday")
+RULE_FILE_MAP = {
+    "income": ("income_rules.csv", INCOME_CATEGORIES),
+    "expense": ("expense_rules.csv", EXPENSE_CATEGORIES),
+}
+WEB_DATA_DIR = Path(os.getenv("MUUC_WEB_DATA_DIR", str(SETTINGS_DIR / "web")))
+WEB_SOURCE_DIR = WEB_DATA_DIR / "source"
+WEB_RULES_DIR = WEB_DATA_DIR / "config"
 PERIOD_OPTIONS = [
     "All Dates",
     "Custom",
@@ -104,12 +114,33 @@ def verify_totp(code: str) -> bool:
         return False
 
 
+def ensure_web_source_dir() -> Path:
+    WEB_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+    for key in SOURCE_KEYS:
+        filename = SOURCE_FILENAMES[key]
+        destination = WEB_SOURCE_DIR / filename
+        bundled_path = RUNTIME_DIR / "source" / filename
+        if not destination.exists() and bundled_path.exists():
+            destination.write_bytes(bundled_path.read_bytes())
+    return WEB_SOURCE_DIR
+
+
 def current_source_paths() -> dict[str, Path]:
-    return {key: Path(path) for key, path in default_file_paths().items()}
+    source_dir = ensure_web_source_dir()
+    return {key: source_dir / SOURCE_FILENAMES[key] for key in SOURCE_KEYS}
+
+
+def ensure_web_rule_file(filename: str) -> Path:
+    WEB_RULES_DIR.mkdir(parents=True, exist_ok=True)
+    destination = WEB_RULES_DIR / filename
+    bundled_path = RUNTIME_DIR / "config" / filename
+    if not destination.exists() and bundled_path.exists():
+        destination.write_bytes(bundled_path.read_bytes())
+    return destination
 
 
 def current_rule_paths() -> tuple[Path, Path]:
-    return ensure_user_rule_file("income_rules.csv"), ensure_user_rule_file("expense_rules.csv")
+    return ensure_web_rule_file("income_rules.csv"), ensure_web_rule_file("expense_rules.csv")
 
 
 def load_bundle() -> AnalysisBundle:
@@ -249,6 +280,26 @@ def source_rows() -> list[dict[str, str]]:
     ]
 
 
+def rule_rows() -> list[dict[str, str]]:
+    income_rules_path, expense_rules_path = current_rule_paths()
+    mapping = {
+        "income": ("Income Rules", income_rules_path),
+        "expense": ("Expense Rules", expense_rules_path),
+    }
+    rows: list[dict[str, str]] = []
+    for key, (label, path) in mapping.items():
+        df = load_rule_table(path, RULE_FILE_MAP[key][1])
+        rows.append(
+            {
+                "key": key,
+                "label": label,
+                "path": str(path),
+                "rows": str(len(df.index)),
+            }
+        )
+    return rows
+
+
 def base_template_context(request: Request) -> dict[str, Any]:
     return {
         "request": request,
@@ -319,6 +370,7 @@ def dashboard_context(
         "transaction_view": transaction_view,
         "transaction_views": ["All", "Income", "Expenses", "Income Misc", "Expense Misc"],
         "source_rows": source_rows(),
+        "rule_rows": rule_rows(),
         "income_total": currency(float(filtered_income["amount"].sum())) if not filtered_income.empty else currency(0.0),
         "expense_total": currency(float(filtered_expenses["amount"].sum())) if not filtered_expenses.empty else currency(0.0),
         "net_total": currency(float(filtered_income["amount"].sum()) - float(filtered_expenses["amount"].sum())),
@@ -420,6 +472,46 @@ def download_source(request: Request, source_key: str) -> StreamingResponse:
     if source_key not in SOURCE_KEYS:
         raise HTTPException(status_code=404, detail="Unknown source key")
     path = current_source_paths()[source_key]
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return StreamingResponse(
+        io.BytesIO(path.read_bytes()),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
+    )
+
+
+@app.post("/upload/rules/{rule_key}")
+async def upload_rules(request: Request, rule_key: str, file: UploadFile) -> RedirectResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    if rule_key not in RULE_FILE_MAP:
+        raise HTTPException(status_code=404, detail="Unknown rule key")
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        return RedirectResponse(url="/dashboard?message=Please upload a CSV file.", status_code=303)
+
+    filename, categories = RULE_FILE_MAP[rule_key]
+    destination = ensure_web_rule_file(filename)
+    contents = await file.read()
+    destination.write_bytes(contents)
+    try:
+        validated = load_rule_table(destination, categories)
+        save_rule_table(destination, validated, categories)
+    except Exception as exc:
+        return RedirectResponse(url=f"/dashboard?message=Failed to load uploaded rules: {exc}", status_code=303)
+    return RedirectResponse(url=f"/dashboard?message=Updated {rule_key} rules file.", status_code=303)
+
+
+@app.get("/download/rules/{rule_key}")
+def download_rules(request: Request, rule_key: str) -> StreamingResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    if rule_key not in RULE_FILE_MAP:
+        raise HTTPException(status_code=404, detail="Unknown rule key")
+    filename, _categories = RULE_FILE_MAP[rule_key]
+    path = ensure_web_rule_file(filename)
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return StreamingResponse(

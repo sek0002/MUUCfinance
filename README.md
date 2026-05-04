@@ -63,6 +63,7 @@ export MUUC_WEB_USERNAME="sek0002"
 export MUUC_WEB_PASSWORD="choose-a-strong-password"
 export MUUC_TOTP_SECRET="paste-secret-from-init-auth"
 export MUUC_SESSION_SECRET="choose-a-long-random-session-secret"
+export MUUC_WEB_DATA_DIR="$HOME/.muuc_finance_analyzer/web"
 ```
 
 3. Start the server:
@@ -84,6 +85,14 @@ The hosted app lets you:
 - download the current source CSVs
 - apply the same date and category filters
 - export the filtered transactions table as CSV
+
+Uploaded source CSVs are stored persistently in `MUUC_WEB_DATA_DIR/source/`.
+If `MUUC_WEB_DATA_DIR` is not set, the default path is `~/.muuc_finance_analyzer/web/source/`.
+On first run, the hosted app seeds that folder from the bundled `source/` defaults.
+
+Hosted rule tables are stored persistently in `MUUC_WEB_DATA_DIR/config/`.
+If `MUUC_WEB_DATA_DIR` is not set, the default path is `~/.muuc_finance_analyzer/web/config/`.
+On first run, the hosted app seeds that folder from the bundled `config/` defaults.
 
 ## Build standalone apps
 
