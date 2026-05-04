@@ -4,7 +4,6 @@
 <section class="dashboard-shell">
   <div class="dashboard-header">
     <div>
-      <h2 class="page-title">MUUC Finance</h2>
       <div class="source-pill-row">
         {% for source in source_rows %}
         <div class="source-pill">
@@ -23,51 +22,71 @@
   {% endif %}
 
   <section class="top-grid">
-    <article class="panel compact-filter-card">
-      <form method="get" action="/dashboard" class="filter-stack">
-        <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
-        <input type="hidden" name="line_category" value="{{ line_category }}">
-        <input type="hidden" name="window_scale" value="{{ window_scale }}">
-        {% for category in pie_categories_selected %}
-        <input type="hidden" name="pie_categories" value="{{ category }}">
-        {% endfor %}
-
-        <select id="period" name="period" onchange="document.getElementById('custom-dates').style.display = this.value === 'Custom' ? 'grid' : 'none'">
-          {% for option in period_options %}
-          <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
+    <div class="dashboard-rail">
+      <article class="panel compact-filter-card">
+        <form method="get" action="/dashboard" class="filter-stack">
+          <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
+          <input type="hidden" name="line_category" value="{{ line_category }}">
+          <input type="hidden" name="window_scale" value="{{ window_scale }}">
+          {% for category in pie_categories_selected %}
+          <input type="hidden" name="pie_categories" value="{{ category }}">
           {% endfor %}
-        </select>
 
-        <div id="custom-dates" class="field-row compact" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
-          <input id="start" name="start" type="date" value="{{ start }}">
-          <input id="end" name="end" type="date" value="{{ end }}">
+          <select id="period" name="period" onchange="document.getElementById('custom-dates').style.display = this.value === 'Custom' ? 'grid' : 'none'">
+            {% for option in period_options %}
+            <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+
+          <div id="custom-dates" class="field-row compact" style="display: {% if show_custom_dates %}grid{% else %}none{% endif %};">
+            <input id="start" name="start" type="date" value="{{ start }}">
+            <input id="end" name="end" type="date" value="{{ end }}">
+          </div>
+
+          <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
+
+          <button type="submit">Apply</button>
+        </form>
+      </article>
+
+      <article class="panel summary-panel">
+        <div class="panel-head tight">
+          <h2>Overview</h2>
         </div>
-
-        <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
-
-        <button type="submit">Apply</button>
-      </form>
-    </article>
+        <div class="summary-stack">
+          <div class="summary-item">
+            <span>Total Income</span>
+            <strong>{{ income_total }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>Total Expenses</span>
+            <strong>{{ expense_total }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>Net</span>
+            <strong>{{ net_total }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>Misc Review</span>
+            <strong>{{ misc_count }}</strong>
+          </div>
+        </div>
+      </article>
+    </div>
 
     <article class="panel chart-card">
-      <div class="panel-head chart-head">
-        <div class="mode-pills">
-          <a href="{{ graph_mode_links['totals'] }}" class="nav-pill{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
-          <a href="{{ graph_mode_links['category'] }}" class="nav-pill{% if graph_mode == 'category' %} active{% endif %}">By Category</a>
-          <a href="{{ graph_mode_links['pie'] }}" class="nav-pill{% if graph_mode == 'pie' %} active{% endif %}">Pie Breakdown</a>
-        </div>
-        <div class="chart-title-block">
-          <h3>{{ chart_title }}</h3>
-          <span>{{ window_label }} window</span>
-        </div>
-      </div>
-
-      <form method="get" action="/dashboard" class="chart-controls">
+      <form method="get" action="/dashboard" class="chart-controls" id="chart-controls">
         <input type="hidden" name="period" value="{{ period }}">
         <input type="hidden" name="start" value="{{ start }}">
         <input type="hidden" name="end" value="{{ end }}">
         <input type="hidden" name="selected_year" value="{{ selected_year }}">
         <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
+
+        <div class="mode-pills compact-pills">
+          <a href="{{ graph_mode_links['totals'] }}" class="nav-pill compact-pill{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
+          <a href="{{ graph_mode_links['category'] }}" class="nav-pill compact-pill{% if graph_mode == 'category' %} active{% endif %}">By Category</a>
+          <a href="{{ graph_mode_links['pie'] }}" class="nav-pill compact-pill{% if graph_mode == 'pie' %} active{% endif %}">Pie Breakdown</a>
+        </div>
 
         <div class="window-control">
           <label for="window_scale">Window</label>
@@ -78,6 +97,7 @@
             max="3"
             name="window_scale"
             value="{{ window_scale }}"
+            data-auto-submit="input"
             oninput="document.getElementById('window-label').textContent = ['Day','Week','Month','Year'][this.value]"
           >
           <span id="window-label">{{ window_label }}</span>
@@ -85,7 +105,7 @@
 
         <div class="period-control">
           <label for="period_repeat">Range</label>
-          <select id="period_repeat" name="period">
+          <select id="period_repeat" name="period" data-auto-submit="change">
             {% for option in period_options %}
             <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
@@ -95,7 +115,7 @@
         {% if graph_mode == 'category' %}
         <div class="category-select">
           <label for="line_category">Category</label>
-          <select id="line_category" name="line_category">
+          <select id="line_category" name="line_category" data-auto-submit="change">
             {% for category in all_categories %}
             <option value="{{ category }}" {% if category == line_category %}selected{% endif %}>{{ category }}</option>
             {% endfor %}
@@ -106,13 +126,19 @@
         {% endif %}
 
         {% if graph_mode == 'pie' %}
-        <div class="pie-filter-pills">
-          {% for category in all_categories %}
-          <label class="mini-pill check-pill{% if category in pie_categories_selected %} active{% endif %}">
-            <input type="checkbox" name="pie_categories" value="{{ category }}" {% if category in pie_categories_selected %}checked{% endif %}>
-            <span>{{ category }}</span>
-          </label>
-          {% endfor %}
+        <div class="pie-filter-menu">
+          <label class="toolbar-label">Categories</label>
+          <details class="filter-menu-dropdown">
+            <summary>{{ pie_categories_selected | length }} selected</summary>
+            <div class="pie-filter-grid">
+              {% for category in all_categories %}
+              <label class="filter-check{% if category in pie_categories_selected %} active{% endif %}">
+                <input type="checkbox" name="pie_categories" value="{{ category }}" {% if category in pie_categories_selected %}checked{% endif %} data-auto-submit="change">
+                <span>{{ category }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </details>
         </div>
         {% else %}
           {% for category in pie_categories_selected %}
@@ -120,21 +146,43 @@
           {% endfor %}
         {% endif %}
 
-        <button type="submit">Update Chart</button>
+        <div class="chart-title-inline">
+          <h3>{{ chart_title }}</h3>
+          <span>{{ window_label }} window</span>
+        </div>
       </form>
 
       <div class="chart-frame">
         {{ chart_svg | safe }}
       </div>
       {{ chart_tooltip_script | safe }}
+      <script>
+        document.addEventListener("DOMContentLoaded", function () {
+          const form = document.getElementById("chart-controls");
+          if (!form) return;
+          let timer = null;
+          const submitSoon = function (delay) {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(function () {
+              form.requestSubmit();
+            }, delay);
+          };
+          form.querySelectorAll("[data-auto-submit='change']").forEach(function (node) {
+            node.addEventListener("change", function () {
+              submitSoon(0);
+            });
+          });
+          form.querySelectorAll("[data-auto-submit='input']").forEach(function (node) {
+            node.addEventListener("change", function () {
+              submitSoon(0);
+            });
+            node.addEventListener("input", function () {
+              submitSoon(180);
+            });
+          });
+        });
+      </script>
     </article>
-  </section>
-
-  <section class="summary-grid fresh-summary">
-    <article class="metric-card primary"><span>Total Income</span><strong>{{ income_total }}</strong></article>
-    <article class="metric-card primary"><span>Total Expenses</span><strong>{{ expense_total }}</strong></article>
-    <article class="metric-card"><span>Net</span><strong>{{ net_total }}</strong></article>
-    <article class="metric-card"><span>Misc Review</span><strong>{{ misc_count }}</strong></article>
   </section>
 
   <section class="lower-grid">
@@ -175,6 +223,34 @@
       <p class="muted">No expense data in range.</p>
       {% endif %}
     </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head tight">
+      <h2>Category Assignment Summary</h2>
+    </div>
+    <div class="table-wrap compact-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Subgroup</th>
+            <th>Transactions</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in category_subgroup_rows %}
+          <tr>
+            <td>{{ row.category }}</td>
+            <td>{{ row.subgroup }}</td>
+            <td>{{ row.transaction_count }}</td>
+            <td class="amount">{{ row.total_amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section class="panel">

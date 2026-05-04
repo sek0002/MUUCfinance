@@ -5,6 +5,8 @@ import html
 import io
 import os
 import re
+import shutil
+import uuid
 from datetime import date
 from pathlib import Path
 from typing import Any, Optional
@@ -14,7 +16,7 @@ import pandas as pd
 import pyotp
 import uvicorn
 from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -50,6 +52,7 @@ RULE_FILE_MAP = {
 WEB_DATA_DIR = Path(os.getenv("MUUC_WEB_DATA_DIR", str(SETTINGS_DIR / "web")))
 WEB_SOURCE_DIR = WEB_DATA_DIR / "source"
 WEB_RULES_DIR = WEB_DATA_DIR / "config"
+WEB_SESSION_DIR = WEB_DATA_DIR / "sessions"
 PERIOD_OPTIONS = [
     "All Dates",
     "Custom",
@@ -63,6 +66,7 @@ PERIOD_OPTIONS = [
     "Current Financial Year",
 ]
 PURCHASE_PREFIX_RE = re.compile(r"^MUUC\s+(?:Ticketing\s+)?Purchase\s+Id:\s*\d+\s*-\s*", flags=re.IGNORECASE)
+DEMO_PIN = "6882"
 
 app = FastAPI(title=f"{APP_NAME} Web")
 app.add_middleware(
@@ -127,8 +131,42 @@ def ensure_web_source_dir() -> Path:
     return WEB_SOURCE_DIR
 
 
-def current_source_paths() -> dict[str, Path]:
-    source_dir = ensure_web_source_dir()
+def is_demo_session(request: Request) -> bool:
+    return request.session.get("session_mode") == "demo"
+
+
+def ensure_demo_session(request: Request) -> Path:
+    session_id = request.session.get("demo_session_id")
+    if not session_id:
+        session_id = uuid.uuid4().hex
+        request.session["demo_session_id"] = session_id
+    root = WEB_SESSION_DIR / session_id
+    source_dir = root / "source"
+    config_dir = root / "config"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    primary_sources = current_source_paths(None)
+    primary_income_rules, primary_expense_rules = current_rule_paths(None)
+    for key, path in primary_sources.items():
+        target = source_dir / SOURCE_FILENAMES[key]
+        if not target.exists() and path.exists():
+            shutil.copyfile(path, target)
+    for filename, source_path in {
+        "income_rules.csv": primary_income_rules,
+        "expense_rules.csv": primary_expense_rules,
+    }.items():
+        target = config_dir / filename
+        if not target.exists() and source_path.exists():
+            shutil.copyfile(source_path, target)
+    return root
+
+
+def current_source_paths(request: Optional[Request] = None) -> dict[str, Path]:
+    if request is not None and is_demo_session(request):
+        source_dir = ensure_demo_session(request) / "source"
+    else:
+        source_dir = ensure_web_source_dir()
     return {key: source_dir / SOURCE_FILENAMES[key] for key in SOURCE_KEYS}
 
 
@@ -141,19 +179,22 @@ def ensure_web_rule_file(filename: str) -> Path:
     return destination
 
 
-def current_rule_paths() -> tuple[Path, Path]:
+def current_rule_paths(request: Optional[Request] = None) -> tuple[Path, Path]:
+    if request is not None and is_demo_session(request):
+        root = ensure_demo_session(request) / "config"
+        return root / "income_rules.csv", root / "expense_rules.csv"
     return ensure_web_rule_file("income_rules.csv"), ensure_web_rule_file("expense_rules.csv")
 
 
 def empty_income_frame() -> pd.DataFrame:
     return pd.DataFrame(
-        columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]
+        columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
     )
 
 
 def empty_expense_frame() -> pd.DataFrame:
     return pd.DataFrame(
-        columns=["date", "description", "category", "matched", "amount", "source", "reference", "name", "email"]
+        columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"]
     )
 
 
@@ -166,14 +207,14 @@ def empty_bundle() -> AnalysisBundle:
     )
 
 
-def missing_source_keys() -> list[str]:
-    paths = current_source_paths()
+def missing_source_keys(request: Optional[Request] = None) -> list[str]:
+    paths = current_source_paths(request)
     return [key for key in SOURCE_KEYS if not paths[key].exists()]
 
 
-def load_bundle() -> AnalysisBundle:
-    source_paths = current_source_paths()
-    income_rules_path, expense_rules_path = current_rule_paths()
+def load_bundle(request: Optional[Request] = None) -> AnalysisBundle:
+    source_paths = current_source_paths(request)
+    income_rules_path, expense_rules_path = current_rule_paths(request)
     return load_analysis(
         source_paths["stripe"],
         source_paths["teamapp"],
@@ -183,14 +224,14 @@ def load_bundle() -> AnalysisBundle:
     )
 
 
-def load_bundle_safe() -> tuple[AnalysisBundle, list[str]]:
-    missing = missing_source_keys()
+def load_bundle_safe(request: Optional[Request] = None) -> tuple[AnalysisBundle, list[str]]:
+    missing = missing_source_keys(request)
     if missing:
         return empty_bundle(), missing
     try:
-        return load_bundle(), []
+        return load_bundle(request), []
     except FileNotFoundError:
-        return empty_bundle(), missing_source_keys()
+        return empty_bundle(), missing_source_keys(request)
 
 
 def merge_csv_bytes(existing_path: Path, uploaded_bytes: bytes) -> tuple[int, int]:
@@ -212,6 +253,61 @@ def merge_csv_bytes(existing_path: Path, uploaded_bytes: bytes) -> tuple[int, in
     skipped_rows = int(len(uploaded_aligned.index) - added_rows)
     merged.to_csv(existing_path, index=False)
     return added_rows, skipped_rows
+
+
+def preview_csv(path: Path, rows: int = 5) -> dict[str, Any]:
+    if not path.exists():
+        return {"headers": [], "rows": [], "row_count": 0}
+    try:
+        df = pd.read_csv(path).fillna("")
+    except Exception:
+        return {"headers": [], "rows": [], "row_count": 0}
+    preview = df.head(rows)
+    return {
+        "headers": [str(column) for column in preview.columns.tolist()],
+        "rows": [[str(value) for value in row] for row in preview.values.tolist()],
+        "row_count": int(len(df.index)),
+    }
+
+
+def editable_rule_table(rule_key: str, request: Optional[Request] = None) -> dict[str, Any]:
+    filename, categories = RULE_FILE_MAP[rule_key]
+    path = current_rule_paths(request)[0] if rule_key == "income" else current_rule_paths(request)[1]
+    df = load_rule_table(path, categories)
+    row_count = max(len(df.index), 8)
+    padded = df.reindex(range(row_count), fill_value="")
+    rows = []
+    for row_index in range(row_count):
+        rows.append(
+            {
+                "index": row_index,
+                "cells": [str(padded.iloc[row_index][category]) for category in categories],
+            }
+        )
+    return {
+        "key": rule_key,
+        "label": "Income Rules" if rule_key == "income" else "Expense Rules",
+        "columns": categories,
+        "rows": rows,
+    }
+
+
+VIEW_OPTIONS = ["All", "Income", "Expenses", "Income Misc", "Expense Misc"]
+
+
+def transaction_view_frame(bundle: AnalysisBundle, view: str) -> pd.DataFrame:
+    if view == "Income":
+        return bundle.income.copy()
+    if view == "Expenses":
+        return bundle.expenses.copy()
+    if view == "Income Misc":
+        return bundle.misc_income.copy()
+    if view == "Expense Misc":
+        return bundle.misc_expenses.copy()
+    combined = pd.concat([bundle.income, bundle.expenses], ignore_index=True, sort=False)
+    if "date" in combined.columns:
+        return combined.sort_values("date", ascending=False)
+    return combined
 
 
 def require_auth(request: Request) -> Optional[RedirectResponse]:
@@ -422,19 +518,22 @@ def build_pie_svg(income_series: pd.Series, expense_series: pd.Series) -> str:
     import math
 
     width = 1160
-    height = 360
+    legend_count = max(len([value for value in income_series.values if float(value) > 0]), len([value for value in expense_series.values if float(value) > 0]), 1)
+    height = max(360, 88 + (legend_count * 22))
     colors = ["#00a67e", "#3b82f6", "#635bff", "#f59e0b", "#db5b7b", "#0ea5e9", "#a855f7", "#14b8a6", "#64748b"]
-    sections = [("Income", income_series, 280), ("Expenses", expense_series, 820)]
+    sections = [("Income", income_series, 72), ("Expenses", expense_series, 620)]
     parts = [f'<svg class="chart-svg pie-svg" viewBox="0 0 {width} {height}" role="img" aria-label="Income and expense pie charts">']
-    for title, series, center_x in sections:
+    for title, series, panel_x in sections:
         total = float(series.sum()) if not series.empty else 0.0
-        parts.append(f'<text x="{center_x}" y="28" text-anchor="middle" class="chart-title">{html.escape(title)}</text>')
+        center_x = panel_x + 118
+        legend_x = panel_x + 264
+        center_y = min(max(height / 2, 158), 200)
+        radius = 92
+        parts.append(f'<text x="{panel_x}" y="30" class="chart-title">{html.escape(title)}</text>')
         if total <= 0:
-            parts.append(f'<text x="{center_x}" y="180" text-anchor="middle" class="axis-label">No data</text>')
+            parts.append(f'<text x="{panel_x}" y="64" class="axis-label">No data</text>')
             continue
         start = -math.pi / 2
-        center_y = 160
-        radius = 88
         for idx, (category, amount) in enumerate(series.items()):
             if float(amount) <= 0:
                 continue
@@ -445,14 +544,16 @@ def build_pie_svg(income_series: pd.Series, expense_series: pd.Series) -> str:
             path = pie_arc(center_x, center_y, radius, start, end)
             parts.append(f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="2" data-tooltip="{html.escape(tooltip)}" />')
             start = end
-        legend_y = 280
-        for idx, (category, amount) in enumerate(series.items()):
+        legend_y = 62
+        visible_items = [(category, amount) for category, amount in series.items() if float(amount) > 0]
+        for idx, (category, amount) in enumerate(visible_items):
             if float(amount) <= 0:
                 continue
             color = colors[idx % len(colors)]
             tooltip = f"{title} | {category} | {currency(float(amount))}"
-            parts.append(f'<rect x="{center_x - 108}" y="{legend_y + idx*20}" width="12" height="12" rx="3" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
-            parts.append(f'<text x="{center_x - 90}" y="{legend_y + idx*20 + 10}" class="legend-label">{html.escape(category)} {html.escape(currency(float(amount)))}</text>')
+            y = legend_y + idx * 22
+            parts.append(f'<rect x="{legend_x}" y="{y}" width="12" height="12" rx="3" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
+            parts.append(f'<text x="{legend_x + 18}" y="{y + 10}" class="legend-label">{html.escape(category)} {html.escape(currency(float(amount)))}</text>')
     parts.append("</svg>")
     return "".join(parts)
 
@@ -488,12 +589,37 @@ def transaction_rows(frame: pd.DataFrame, include_contact: bool) -> list[dict[st
             {
                 "date": "" if pd.isna(dt) else dt.strftime("%Y-%m-%d"),
                 "category": row.get("category", ""),
+                "subgroup": row.get("subgroup", "") or "Unmatched",
                 "identifier": strip_purchase_prefix(str(row.get("description") or row.get("reference") or "")),
                 "name": row.get("name", "") if include_contact else "",
                 "email": row.get("email", "") if include_contact else "",
                 "amount": currency(float(row.get("amount", 0.0))),
                 "source": row.get("source", ""),
                 "matched": "Yes" if bool(row.get("matched")) else "No",
+            }
+        )
+    return rows
+
+
+def category_subgroup_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list[dict[str, Any]]:
+    combined = pd.concat([income, expenses], ignore_index=True, sort=False)
+    if combined.empty:
+        return []
+    summary = (
+        combined.assign(subgroup=combined.get("subgroup", "").fillna("").replace("", "Unmatched"))
+        .groupby(["category", "subgroup"], dropna=False)
+        .agg(transaction_count=("amount", "size"), total_amount=("amount", "sum"))
+        .reset_index()
+        .sort_values(["category", "total_amount"], ascending=[True, False])
+    )
+    rows: list[dict[str, Any]] = []
+    for _, row in summary.iterrows():
+        rows.append(
+            {
+                "category": str(row["category"]),
+                "subgroup": str(row["subgroup"]),
+                "transaction_count": int(row["transaction_count"]),
+                "total_amount": currency(float(row["total_amount"])),
             }
         )
     return rows
@@ -537,8 +663,8 @@ def monthly_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list[dict[str,
     return rows
 
 
-def source_rows() -> list[dict[str, str]]:
-    paths = current_source_paths()
+def source_rows(request: Optional[Request] = None) -> list[dict[str, Any]]:
+    paths = current_source_paths(request)
     labels = {
         "stripe": "Stripe CSV",
         "teamapp": "TeamApp CSV",
@@ -551,13 +677,14 @@ def source_rows() -> list[dict[str, str]]:
             "path": str(paths[key]),
             "exists": "1" if paths[key].exists() else "",
             "latest": latest_entry_label(key, paths[key]),
+            "preview": preview_csv(paths[key]),
         }
         for key in SOURCE_KEYS
     ]
 
 
-def rule_rows() -> list[dict[str, str]]:
-    income_rules_path, expense_rules_path = current_rule_paths()
+def rule_rows(request: Optional[Request] = None) -> list[dict[str, Any]]:
+    income_rules_path, expense_rules_path = current_rule_paths(request)
     mapping = {
         "income": ("Income Rules", income_rules_path),
         "expense": ("Expense Rules", expense_rules_path),
@@ -571,6 +698,7 @@ def rule_rows() -> list[dict[str, str]]:
                 "label": label,
                 "path": str(path),
                 "rows": str(len(df.index)),
+                "preview": preview_csv(path),
             }
         )
     return rows
@@ -582,6 +710,8 @@ def base_template_context(request: Request) -> dict[str, Any]:
         "app_name": APP_NAME,
         "auth_error": auth_config_error(),
         "asset_version": ASSET_VERSION,
+        "session_mode": request.session.get("session_mode", "admin"),
+        "is_demo_session": is_demo_session(request),
     }
 
 
@@ -597,7 +727,7 @@ def dashboard_context(
     pie_categories: list[str],
     message: Optional[str],
 ) -> dict[str, Any]:
-    bundle, missing_sources = load_bundle_safe()
+    bundle, missing_sources = load_bundle_safe(request)
     start, end = period_range(period, start_text, end_text, selected_year)
     filtered_income = filter_frame(bundle.income, start, end)
     filtered_expenses = filter_frame(bundle.expenses, start, end)
@@ -646,7 +776,7 @@ def dashboard_context(
         **base_template_context(request),
         "message": message,
         "active_page": "dashboard",
-        "source_rows": source_rows(),
+        "source_rows": source_rows(request),
         "period": period,
         "period_options": PERIOD_OPTIONS,
         "start": start_text,
@@ -661,6 +791,7 @@ def dashboard_context(
         "misc_count": len(filter_frame(bundle.misc_income, start, end)) + len(filter_frame(bundle.misc_expenses, start, end)),
         "income_rows": category_rows(income_summary),
         "expense_rows": category_rows(expense_summary),
+        "category_subgroup_rows": category_subgroup_rows(filtered_income, filtered_expenses),
         "recent_transactions": transaction_rows(recent_transactions, include_contact=True)[:24],
         "export_query": export_query,
         "graph_mode": graph_mode_value,
@@ -685,18 +816,24 @@ def files_context(request: Request, message: Optional[str]) -> dict[str, Any]:
         **base_template_context(request),
         "message": message,
         "active_page": "files",
-        "source_rows": source_rows(),
-        "rule_rows": rule_rows(),
-        "missing_sources": missing_source_keys(),
+        "source_rows": source_rows(request),
+        "rule_rows": rule_rows(request),
+        "missing_sources": missing_source_keys(request),
     }
 
 
-def rules_context(request: Request, message: Optional[str]) -> dict[str, Any]:
+def rules_context(request: Request, message: Optional[str], view: str = "All") -> dict[str, Any]:
+    bundle, _missing_sources = load_bundle_safe(request)
+    active_view = view if view in VIEW_OPTIONS else "All"
     return {
         **base_template_context(request),
         "message": message,
         "active_page": "rules",
-        "rule_rows": rule_rows(),
+        "income_rule_table": editable_rule_table("income", request),
+        "expense_rule_table": editable_rule_table("expense", request),
+        "view_options": VIEW_OPTIONS,
+        "active_view": active_view,
+        "review_rows": transaction_rows(transaction_view_frame(bundle, active_view), include_contact=True),
     }
 
 
@@ -725,12 +862,13 @@ def login_page(request: Request, message: Optional[str] = None) -> HTMLResponse:
             **base_template_context(request),
             "login_error": bool(message),
             "login_page": True,
+            "message": "Invalid login code." if message else None,
         },
     )
 
 
-@app.post("/login")
-async def login(
+@app.post("/login/admin")
+async def admin_login(
     request: Request,
     totp_code: str = Form(...),
 ) -> RedirectResponse:
@@ -743,6 +881,24 @@ async def login(
 
     request.session["authenticated"] = True
     request.session["username"] = auth_config()["username"]
+    request.session["session_mode"] = "admin"
+    request.session.pop("demo_session_id", None)
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@app.post("/login/pin")
+async def pin_login(
+    request: Request,
+    pin_code: str = Form(...),
+) -> RedirectResponse:
+    if pin_code.strip() != DEMO_PIN:
+        return RedirectResponse(url="/login?message=1", status_code=303)
+
+    request.session["authenticated"] = True
+    request.session["username"] = "demo"
+    request.session["session_mode"] = "demo"
+    request.session.pop("demo_session_id", None)
+    ensure_demo_session(request)
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
@@ -792,11 +948,11 @@ def files_page(request: Request, message: Optional[str] = Query(None)) -> HTMLRe
 
 
 @app.get("/rules", response_class=HTMLResponse)
-def rules_page(request: Request, message: Optional[str] = Query(None)) -> HTMLResponse:
+def rules_page(request: Request, message: Optional[str] = Query(None), view: str = Query("All")) -> HTMLResponse:
     auth_redirect = require_auth(request)
     if auth_redirect:
         return auth_redirect
-    return templates.TemplateResponse("rules.html", rules_context(request, message))
+    return templates.TemplateResponse("rules.html", rules_context(request, message, view))
 
 
 @app.post("/upload/{source_key}")
@@ -809,7 +965,7 @@ async def upload_source(request: Request, source_key: str, file: UploadFile) -> 
     if not file.filename or not file.filename.lower().endswith(".csv"):
         return RedirectResponse(url="/files?message=Please upload a CSV file.", status_code=303)
 
-    destination = current_source_paths()[source_key]
+    destination = current_source_paths(request)[source_key]
     contents = await file.read()
     try:
         added_rows, skipped_rows = merge_csv_bytes(destination, contents)
@@ -828,7 +984,7 @@ def download_source(request: Request, source_key: str) -> StreamingResponse:
         return auth_redirect
     if source_key not in SOURCE_KEYS:
         raise HTTPException(status_code=404, detail="Unknown source key")
-    path = current_source_paths()[source_key]
+    path = current_source_paths(request)[source_key]
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return StreamingResponse(
@@ -849,7 +1005,7 @@ async def upload_rules(request: Request, rule_key: str, file: UploadFile) -> Red
         return RedirectResponse(url="/files?message=Please upload a CSV file.", status_code=303)
 
     filename, categories = RULE_FILE_MAP[rule_key]
-    destination = ensure_web_rule_file(filename)
+    destination = current_rule_paths(request)[0] if rule_key == "income" else current_rule_paths(request)[1]
     contents = await file.read()
     destination.write_bytes(contents)
     try:
@@ -860,6 +1016,27 @@ async def upload_rules(request: Request, rule_key: str, file: UploadFile) -> Red
     return RedirectResponse(url=f"/files?message=Updated {rule_key} rules file.", status_code=303)
 
 
+@app.post("/rules/save/{rule_key}")
+async def save_rules_table(request: Request, rule_key: str) -> JSONResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    if rule_key not in RULE_FILE_MAP:
+        raise HTTPException(status_code=404, detail="Unknown rule key")
+
+    payload = await request.json()
+    columns = payload.get("columns", [])
+    rows = payload.get("rows", [])
+    filename, expected_categories = RULE_FILE_MAP[rule_key]
+    if columns != expected_categories:
+        return JSONResponse({"ok": False, "error": "Rule columns do not match expected categories."}, status_code=400)
+
+    frame = pd.DataFrame(rows, columns=expected_categories).fillna("").astype(str)
+    destination = current_rule_paths(request)[0] if rule_key == "income" else current_rule_paths(request)[1]
+    save_rule_table(destination, frame, expected_categories)
+    return JSONResponse({"ok": True, "saved_rows": int(len(frame.index))})
+
+
 @app.get("/download/rules/{rule_key}")
 def download_rules(request: Request, rule_key: str) -> StreamingResponse:
     auth_redirect = require_auth(request)
@@ -868,7 +1045,7 @@ def download_rules(request: Request, rule_key: str) -> StreamingResponse:
     if rule_key not in RULE_FILE_MAP:
         raise HTTPException(status_code=404, detail="Unknown rule key")
     filename, _categories = RULE_FILE_MAP[rule_key]
-    path = ensure_web_rule_file(filename)
+    path = current_rule_paths(request)[0] if rule_key == "income" else current_rule_paths(request)[1]
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return StreamingResponse(
@@ -893,7 +1070,7 @@ def export_transactions(
     auth_redirect = require_auth(request)
     if auth_redirect:
         return auth_redirect
-    bundle, _missing_sources = load_bundle_safe()
+    bundle, _missing_sources = load_bundle_safe(request)
     start_date, end_date = period_range(period, start, end, selected_year)
     filtered_income = filter_frame(bundle.income, start_date, end_date)
     filtered_expenses = filter_frame(bundle.expenses, start_date, end_date)

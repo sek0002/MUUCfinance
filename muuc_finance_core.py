@@ -180,26 +180,30 @@ def save_rule_table(path: Path, df: pd.DataFrame, categories: list[str]) -> None
 
 
 def compile_rule_map(df: pd.DataFrame, categories: list[str]) -> dict[str, list[re.Pattern[str]]]:
-    compiled: dict[str, list[re.Pattern[str]]] = {category: [] for category in categories}
+    compiled: dict[str, list[tuple[str, re.Pattern[str]]]] = {category: [] for category in categories}
     for category in categories:
         for value in df.get(category, pd.Series(dtype="object")).tolist():
             text = str(value).strip()
             if not text:
                 continue
             try:
-                compiled[category].append(re.compile(text, re.IGNORECASE))
+                compiled[category].append((text, re.compile(text, re.IGNORECASE)))
             except re.error:
                 continue
     return compiled
 
 
-def match_category(text: str, compiled_rules: dict[str, list[re.Pattern[str]]], categories: list[str]) -> tuple[str, bool]:
+def match_category(
+    text: str,
+    compiled_rules: dict[str, list[tuple[str, re.Pattern[str]]]],
+    categories: list[str],
+) -> tuple[str, bool, str]:
     haystack = text or ""
     for category in categories:
-        for pattern in compiled_rules.get(category, []):
+        for pattern_text, pattern in compiled_rules.get(category, []):
             if pattern.search(haystack):
-                return category, True
-    return "misc", False
+                return category, True, pattern_text
+    return "misc", False, ""
 
 
 def parse_stripe_income(stripe_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -217,20 +221,22 @@ def parse_stripe_income(stripe_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     fee_expenses = df[df["fee_amount"] > 0][["date", "description", "fee_amount", "id"]].copy()
     fee_expenses["category"] = "fees"
     fee_expenses["matched"] = True
+    fee_expenses["subgroup"] = "Fee column"
     fee_expenses["source"] = "stripe fee"
     fee_expenses.rename(columns={"fee_amount": "amount", "id": "reference"}, inplace=True)
     refund_expenses = df[refund_mask][["date", "description", "refunded_amount", "id"]].copy()
     refund_expenses = refund_expenses[refund_expenses["refunded_amount"] > 0].copy()
     refund_expenses["category"] = "refunds"
     refund_expenses["matched"] = True
+    refund_expenses["subgroup"] = "Refund status"
     refund_expenses["source"] = "stripe refund"
     refund_expenses.rename(columns={"refunded_amount": "amount", "id": "reference"}, inplace=True)
     expenses = pd.concat([fee_expenses, refund_expenses], ignore_index=True, sort=False)
     expenses["name"] = ""
     expenses["email"] = ""
-    expenses = expenses[["date", "description", "category", "matched", "amount", "source", "reference", "name", "email"]]
+    expenses = expenses[["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"]]
     income = pd.DataFrame(
-        columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]
+        columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
     )
     return income, expenses
 
@@ -256,15 +262,16 @@ def parse_teamapp_income(teamapp_path: Path, rule_df: pd.DataFrame) -> pd.DataFr
     compiled = compile_rule_map(rule_df, INCOME_CATEGORIES)
     if df.empty:
         return pd.DataFrame(
-            columns=["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]
+            columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
         )
-    categories, matched = zip(*df["description"].map(lambda value: match_category(value, compiled, INCOME_CATEGORIES)))
+    categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, INCOME_CATEGORIES)))
     df["category"] = list(categories)
     df["matched"] = list(matched)
+    df["subgroup"] = list(subgroups)
     df["source"] = "teamapp income"
     df["reference"] = df["purchase_id"].fillna("").astype(str)
     df["refunded_amount"] = 0.0
-    return df[["date", "description", "category", "matched", "amount", "source", "reference", "refunded_amount", "name", "email"]]
+    return df[["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]]
 
 
 def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
@@ -285,14 +292,15 @@ def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Da
     detail_text = df["Transaction Details"].fillna("") + " " + df["Merchant Name"].fillna("")
     df["description"] = detail_text.str.strip()
     compiled = compile_rule_map(rule_df, EXPENSE_CATEGORIES)
-    categories, matched = zip(*df["description"].map(lambda value: match_category(value, compiled, EXPENSE_CATEGORIES)))
+    categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, EXPENSE_CATEGORIES)))
     df["category"] = list(categories)
     df["matched"] = list(matched)
+    df["subgroup"] = list(subgroups)
     df["source"] = "everyday expense"
     df["reference"] = ""
     df["name"] = ""
     df["email"] = ""
-    return df[["date", "description", "category", "matched", "amount", "source", "reference", "name", "email"]]
+    return df[["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"]]
 
 
 def load_analysis(

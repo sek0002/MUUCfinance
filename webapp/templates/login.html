@@ -1,22 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="login-minimal">
-  <form method="post" action="/login" class="login-minimal-form">
-    <input
-      type="text"
-      name="totp_code"
-      inputmode="numeric"
-      pattern="[0-9]{6}"
-      maxlength="6"
-      autocomplete="one-time-code"
-      placeholder="000000"
-      class="{% if login_error %}login-error{% endif %}"
-      required
-      autofocus
-      aria-label="TOTP code"
-    >
-    <button type="submit" aria-label="Submit TOTP code">></button>
-  </form>
+<section class="login-shell">
+  <article class="login-panel">
+    <div class="eyebrow">Administrator</div>
+    <h2>Admin Login</h2>
+    <p class="muted">Uses the persistent finance data and saved rule tables.</p>
+    <form method="post" action="/login/admin" class="login-minimal-form stacked-login-form">
+      <input
+        type="text"
+        name="totp_code"
+        inputmode="numeric"
+        pattern="[0-9]{6}"
+        maxlength="6"
+        autocomplete="one-time-code"
+        placeholder="OTP"
+        class="{% if login_error %}login-error{% endif %}"
+        required
+        autofocus
+        aria-label="Administrator OTP code"
+      >
+      <button type="submit" aria-label="Submit administrator OTP code">Enter</button>
+    </form>
+  </article>
+
+  <article class="login-panel">
+    <div class="eyebrow">Sandbox</div>
+    <h2>PIN Access</h2>
+    <p class="muted">Loads a disposable copy of the app. Uploads and rule edits are not persisted.</p>
+    <form method="post" action="/login/pin" class="login-minimal-form stacked-login-form">
+      <input
+        type="password"
+        name="pin_code"
+        inputmode="numeric"
+        pattern="[0-9]{4}"
+        maxlength="4"
+        autocomplete="one-time-code"
+        placeholder="PIN"
+        class="{% if login_error %}login-error{% endif %}"
+        required
+        aria-label="Sandbox PIN code"
+      >
+      <button type="submit" aria-label="Submit sandbox PIN code">Enter</button>
+    </form>
+  </article>
 </section>
 {% endblock %}

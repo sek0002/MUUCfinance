@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name }}</title>
-  <meta name="theme-color" content="#635bff">
+  <meta name="theme-color" content="#635bff" id="theme-color-meta">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="MUUC Finance">
@@ -12,6 +12,16 @@
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ asset_version }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/apple-touch-icon.png') }}?v={{ asset_version }}">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ asset_version }}">
+  <script>
+    (function () {
+      var stored = localStorage.getItem("muuc-theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      var theme = stored || (prefersDark ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+      var meta = document.getElementById("theme-color-meta");
+      if (meta) meta.setAttribute("content", theme === "dark" ? "#0d1522" : "#635bff");
+    })();
+  </script>
 </head>
 <body>
   <div class="shell{% if login_page %} shell-login{% endif %}">
@@ -25,16 +35,23 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <nav class="topnav">
-          <a class="nav-pill{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
-          <a class="nav-pill{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
-          <a class="nav-pill{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>
-        </nav>
-        {% if request.session.get("authenticated") %}
-        <form method="post" action="/logout">
-          <button type="submit" class="ghost-button">Sign Out</button>
-        </form>
-        {% endif %}
+        <details class="menu-dropdown">
+          <summary class="ghost-button menu-trigger">Menu</summary>
+          <div class="menu-panel">
+            {% if is_demo_session %}
+            <div class="menu-label">Sandbox Mode</div>
+            {% endif %}
+            <a class="menu-link{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
+            <a class="menu-link{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
+            <a class="menu-link{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>
+            <button type="button" class="menu-link button-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">Dark Mode</button>
+            {% if request.session.get("authenticated") %}
+            <form method="post" action="/logout">
+              <button type="submit" class="menu-link button-link signout-link">Sign Out</button>
+            </form>
+            {% endif %}
+          </div>
+        </details>
       </div>
     </header>
 
@@ -54,6 +71,25 @@
         navigator.serviceWorker.register("/sw.js?v={{ asset_version }}");
       });
     }
+    (function () {
+      var button = document.getElementById("theme-toggle");
+      if (!button) return;
+      var root = document.documentElement;
+      var meta = document.getElementById("theme-color-meta");
+      var sync = function () {
+        var theme = root.getAttribute("data-theme") || "light";
+        button.textContent = theme === "dark" ? "Light Mode" : "Dark Mode";
+        button.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+        if (meta) meta.setAttribute("content", theme === "dark" ? "#0d1522" : "#635bff");
+      };
+      button.addEventListener("click", function () {
+        var next = (root.getAttribute("data-theme") || "light") === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        localStorage.setItem("muuc-theme", next);
+        sync();
+      });
+      sync();
+    })();
   </script>
 </body>
 </html>

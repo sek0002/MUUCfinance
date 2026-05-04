@@ -1,27 +1,163 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel">
-  <div class="panel-head tight">
-    <h2>Rules</h2>
-  </div>
-  <div class="source-grid files-grid">
-    {% for rule in rule_rows %}
-    <article class="source-card">
-      <div>
-        <div class="eyebrow">{{ rule.label }}</div>
-        <div class="source-path">{{ rule.path }}</div>
-        <div class="muted">{{ rule.rows }} rows</div>
-      </div>
-      <div class="source-actions">
-        <a class="ghost-link" href="/download/rules/{{ rule.key }}">Download Current</a>
-        <form method="post" action="/upload/rules/{{ rule.key }}" enctype="multipart/form-data" class="upload-form">
-          <input type="file" name="file" accept=".csv" required>
-          <button type="submit">Upload Replacement</button>
-        </form>
-      </div>
-    </article>
-    {% endfor %}
-  </div>
+<section class="rules-shell">
+  <section class="panel">
+    <div class="panel-head tight">
+      <h2>Rule Tables</h2>
+      <div class="muted">Edits save automatically to the stored CSV rule tables.</div>
+    </div>
+    <div class="rules-grid">
+      {% for table in [income_rule_table, expense_rule_table] %}
+      <article class="panel nested-panel">
+        <div class="panel-head tight">
+          <h2>{{ table.label }}</h2>
+          <div class="muted autosave-status" id="{{ table.key }}-save-status">Saved</div>
+        </div>
+        <div class="table-wrap rules-table-wrap">
+          <table class="rules-edit-table" data-rule-key="{{ table.key }}">
+            <thead>
+              <tr>
+                {% for column in table.columns %}
+                <th>{{ column }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in table.rows %}
+              <tr>
+                {% for value in row.cells %}
+                <td>
+                  <input type="text" value="{{ value }}" data-row="{{ row.index }}" data-column="{{ loop.index0 }}">
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button type="button" class="ghost-button add-rule-row" data-rule-key="{{ table.key }}">Add Row</button>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head tight">
+      <h2>Rule Review</h2>
+      <form method="get" action="/rules" class="rules-toolbar">
+        <label class="rules-view-picker">
+          <span>View</span>
+          <select name="view" onchange="this.form.submit()">
+            {% for option in view_options %}
+            <option value="{{ option }}" {% if option == active_view %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Source</th>
+            <th>Category</th>
+            <th>Subgroup</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Amount</th>
+            <th>Matched</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in review_rows %}
+          <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.source }}</td>
+            <td>{{ row.category }}</td>
+            <td>{{ row.subgroup }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.email }}</td>
+            <td class="amount">{{ row.amount }}</td>
+            <td>{{ row.matched }}</td>
+            <td>{{ row.identifier }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </section>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const saveTimers = new Map();
+
+    const serializeTable = function (table) {
+      const headers = Array.from(table.querySelectorAll("thead th")).map((node) => node.textContent.trim());
+      const rows = Array.from(table.querySelectorAll("tbody tr")).map(function (tr) {
+        return Array.from(tr.querySelectorAll("input")).map(function (input) {
+          return input.value;
+        });
+      });
+      return { columns: headers, rows: rows };
+    };
+
+    const saveTable = function (table) {
+      const ruleKey = table.dataset.ruleKey;
+      const status = document.getElementById(ruleKey + "-save-status");
+      if (status) status.textContent = "Saving...";
+      fetch("/rules/save/" + ruleKey, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serializeTable(table))
+      })
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+          if (!payload.ok) throw new Error(payload.error || "Save failed");
+          if (status) status.textContent = "Saved";
+        })
+        .catch(function () {
+          if (status) status.textContent = "Save failed";
+        });
+    };
+
+    document.querySelectorAll(".rules-edit-table").forEach(function (table) {
+      table.addEventListener("input", function () {
+        const ruleKey = table.dataset.ruleKey;
+        window.clearTimeout(saveTimers.get(ruleKey));
+        saveTimers.set(ruleKey, window.setTimeout(function () {
+          saveTable(table);
+        }, 500));
+      });
+    });
+
+    document.querySelectorAll(".add-rule-row").forEach(function (button) {
+      button.addEventListener("click", function () {
+        const ruleKey = button.dataset.ruleKey;
+        const table = document.querySelector(".rules-edit-table[data-rule-key='" + ruleKey + "']");
+        const tbody = table.querySelector("tbody");
+        const rowCount = tbody.querySelectorAll("tr").length;
+        const columnCount = table.querySelectorAll("thead th").length;
+        const tr = document.createElement("tr");
+        for (let index = 0; index < columnCount; index += 1) {
+          const td = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "text";
+          input.value = "";
+          input.dataset.row = String(rowCount);
+          input.dataset.column = String(index);
+          td.appendChild(input);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+        saveTable(table);
+      });
+    });
+  });
+</script>
 {% endblock %}
