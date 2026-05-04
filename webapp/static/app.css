@@ -781,7 +781,7 @@ button {
 .axis-line { stroke: color-mix(in srgb, var(--line) 78%, white 22%); stroke-width: 1.2; }
 .grid-line { stroke: color-mix(in srgb, var(--line) 56%, white 44%); stroke-width: 1; }
 .axis-label,
-.legend-label { fill: var(--muted); font-size: 13px; }
+.legend-label { fill: var(--muted); font-size: 26px; }
 .year-inset {
   fill: color-mix(in srgb, var(--panel-soft) 76%, var(--panel) 24%);
   stroke: var(--line);
@@ -790,7 +790,7 @@ button {
 
 .year-inset-label {
   fill: var(--muted);
-  font-size: 10px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.08em;
 }

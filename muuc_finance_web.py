@@ -500,8 +500,8 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 52
-    margin_bottom = 128
+    margin_top = 36
+    margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -536,7 +536,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
         display_label = format_bucket_label(label, window_key)
         parts.append(
-            f'<text x="{x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 14})" class="axis-label">{html.escape(display_label)}</text>'
+            f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
 
     if window_key != "year" and labels:
@@ -551,7 +551,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
                 group_start = index
         year_groups.append((current_year, group_start, len(labels) - 1))
 
-        inset_y = margin_top + plot_height + 10
+        inset_y = margin_top + plot_height + 6
         inset_height = 18
         for year, start_index, end_index in year_groups:
             start_x = margin_left + (start_index * x_step if len(labels) > 1 else plot_width / 2)
@@ -594,8 +594,8 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 52
-    margin_bottom = 128
+    margin_top = 36
+    margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -634,7 +634,7 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
         center_x = group_start + group_width / 2
         display_label = format_bucket_label(label, window_key)
         parts.append(
-            f'<text x="{center_x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 14})" class="axis-label">{html.escape(display_label)}</text>'
+            f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
 
     if window_key != "year" and labels:
@@ -649,7 +649,7 @@ def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key
                 group_start_index = index
         year_groups.append((current_year, group_start_index, len(labels) - 1))
 
-        inset_y = margin_top + plot_height + 10
+        inset_y = margin_top + plot_height + 6
         inset_height = 18
         for year, start_index, end_index in year_groups:
             start_x = margin_left + (start_index * group_width)
@@ -689,8 +689,8 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 52
-    margin_bottom = 128
+    margin_top = 36
+    margin_bottom = 108
     colors = {"Income": "#00a67e", "Expenses": "#db5b7b"}
     labels = list(dict.fromkeys(list(income_totals.index) + list(expense_totals.index)))
     if not labels:
@@ -735,7 +735,7 @@ def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_tota
     for index, label in enumerate(labels):
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
         parts.append(
-            f'<text x="{x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 14})" class="axis-label">{html.escape(str(label))}</text>'
+            f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(str(label))}</text>'
         )
 
     add_series("Income", income_totals)
@@ -759,8 +759,8 @@ def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 52
-    margin_bottom = 128
+    margin_top = 36
+    margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
     income_segments = [(label, float(income_totals.get(label, 0.0))) for label in income_totals.index.tolist() if float(income_totals.get(label, 0.0)) > 0]
@@ -803,7 +803,7 @@ def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.
                 f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(segment_height, 1):.1f}" rx="6" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
             )
             running_height += segment_height
-        parts.append(f'<text x="{center_x:.1f}" y="{height - 14}" text-anchor="middle" class="axis-label">{html.escape(group_name)}</text>')
+        parts.append(f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="middle" class="axis-label">{html.escape(group_name)}</text>')
 
     draw_stack(0, "Income", income_segments)
     draw_stack(1, "Expenses", expense_segments)
@@ -833,8 +833,8 @@ def build_time_stacked_category_bar_svg(
     height = 620
     margin_left = 92
     margin_right = 44
-    margin_top = 52
-    margin_bottom = 128
+    margin_top = 36
+    margin_bottom = 108
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
 
     labels = []
@@ -877,7 +877,7 @@ def build_time_stacked_category_bar_svg(
         center_x = group_start + group_width / 2
         display_label = format_bucket_label(label, window_key)
         parts.append(
-            f'<text x="{center_x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 14})" class="axis-label">{html.escape(display_label)}</text>'
+            f'<text x="{center_x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
         )
 
     if window_key != "year" and labels:
@@ -892,7 +892,7 @@ def build_time_stacked_category_bar_svg(
                 group_start_index = index
         year_groups.append((current_year, group_start_index, len(labels) - 1))
 
-        inset_y = margin_top + plot_height + 10
+        inset_y = margin_top + plot_height + 6
         inset_height = 18
         for year, start_index, end_index in year_groups:
             start_x = margin_left + (start_index * group_width)
