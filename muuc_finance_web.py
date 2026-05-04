@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import hmac
 import io
 import os
 import re
@@ -81,7 +80,6 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def auth_config() -> dict[str, str]:
     return {
         "username": os.getenv("MUUC_WEB_USERNAME", "admin"),
-        "password": os.getenv("MUUC_WEB_PASSWORD", ""),
         "totp_secret": os.getenv("MUUC_TOTP_SECRET", ""),
         "issuer": os.getenv("MUUC_TOTP_ISSUER", APP_NAME),
     }
@@ -89,19 +87,9 @@ def auth_config() -> dict[str, str]:
 
 def auth_config_error() -> Optional[str]:
     cfg = auth_config()
-    missing = []
-    if not cfg["password"]:
-        missing.append("MUUC_WEB_PASSWORD")
     if not cfg["totp_secret"]:
-        missing.append("MUUC_TOTP_SECRET")
-    if missing:
-        return f"Missing auth configuration: {', '.join(missing)}"
+        return "Missing auth configuration: MUUC_TOTP_SECRET"
     return None
-
-
-def verify_password(candidate: str) -> bool:
-    password = auth_config()["password"]
-    return bool(password) and hmac.compare_digest(candidate, password)
 
 
 def verify_totp(code: str) -> bool:
@@ -405,8 +393,8 @@ def login_page(request: Request, message: Optional[str] = None) -> HTMLResponse:
         "login.html",
         {
             **base_template_context(request),
-            "message": message,
-            "configured_username": auth_config()["username"],
+            "login_error": bool(message),
+            "login_page": True,
         },
     )
 
@@ -414,26 +402,24 @@ def login_page(request: Request, message: Optional[str] = None) -> HTMLResponse:
 @app.post("/login")
 async def login(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
     totp_code: str = Form(...),
 ) -> RedirectResponse:
     config_error = auth_config_error()
     if config_error:
         return RedirectResponse(url=f"/login?message={config_error}", status_code=303)
 
-    if username != auth_config()["username"] or not verify_password(password) or not verify_totp(totp_code):
-        return RedirectResponse(url="/login?message=Invalid login details or authenticator code.", status_code=303)
+    if not verify_totp(totp_code):
+        return RedirectResponse(url="/login?message=1", status_code=303)
 
     request.session["authenticated"] = True
-    request.session["username"] = username
+    request.session["username"] = auth_config()["username"]
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
 @app.post("/logout")
 def logout(request: Request) -> RedirectResponse:
     request.session.clear()
-    return RedirectResponse(url="/login?message=Signed out.", status_code=303)
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

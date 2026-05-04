@@ -7,7 +7,8 @@
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
 </head>
 <body>
-  <div class="shell">
+  <div class="shell{% if login_page %} shell-login{% endif %}">
+    {% if not login_page %}
     <header class="topbar">
       <div>
         <div class="eyebrow">MUUC Finance</div>
@@ -28,6 +29,7 @@
     {% endif %}
     {% if message %}
     <section class="banner info">{{ message }}</section>
+    {% endif %}
     {% endif %}
 
     {% block content %}{% endblock %}
