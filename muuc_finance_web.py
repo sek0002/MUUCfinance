@@ -8,7 +8,7 @@ import os
 import re
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -87,7 +87,7 @@ def auth_config() -> dict[str, str]:
     }
 
 
-def auth_config_error() -> str | None:
+def auth_config_error() -> Optional[str]:
     cfg = auth_config()
     missing = []
     if not cfg["password"]:
@@ -155,7 +155,7 @@ def load_bundle() -> AnalysisBundle:
     )
 
 
-def require_auth(request: Request) -> RedirectResponse | None:
+def require_auth(request: Request) -> Optional[RedirectResponse]:
     if not request.session.get("authenticated"):
         return RedirectResponse(url="/login", status_code=303)
     return None
@@ -170,7 +170,14 @@ def strip_purchase_prefix(value: str) -> str:
     return PURCHASE_PREFIX_RE.sub("", value or "")
 
 
-def frame_for_view(bundle: AnalysisBundle, income: pd.DataFrame, expenses: pd.DataFrame, view: str, start: date | None, end: date | None) -> pd.DataFrame:
+def frame_for_view(
+    bundle: AnalysisBundle,
+    income: pd.DataFrame,
+    expenses: pd.DataFrame,
+    view: str,
+    start: Optional[date],
+    end: Optional[date],
+) -> pd.DataFrame:
     if view == "Income":
         return income.copy()
     if view == "Expenses":
@@ -329,7 +336,7 @@ def dashboard_context(
     selected_year: int,
     categories: list[str],
     transaction_view: str,
-    message: str | None,
+    message: Optional[str],
 ) -> dict[str, Any]:
     bundle = load_bundle()
     active_categories = requested_categories(categories)
@@ -393,7 +400,7 @@ def home(request: Request) -> RedirectResponse:
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, message: str | None = None) -> HTMLResponse:
+def login_page(request: Request, message: Optional[str] = None) -> HTMLResponse:
     return templates.TemplateResponse(
         "login.html",
         {
@@ -438,7 +445,7 @@ def dashboard(
     selected_year: int = Query(date.today().year),
     categories: list[str] = Query(default=[]),
     transaction_view: str = Query("All"),
-    message: str | None = Query(None),
+    message: Optional[str] = Query(None),
 ) -> HTMLResponse:
     auth_redirect = require_auth(request)
     if auth_redirect:
