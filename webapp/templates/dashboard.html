@@ -43,7 +43,9 @@
             <input id="end" name="end" type="date" value="{{ end }}">
           </div>
 
-          <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
+          <div id="selected-year-wrap" class="conditional-year-field" style="display: {% if period == 'Selected Year' %}block{% else %}none{% endif %};">
+            <input id="selected_year" name="selected_year" type="number" min="2000" max="2100" value="{{ selected_year }}">
+          </div>
 
           <button type="submit">Apply</button>
         </form>
@@ -56,15 +58,15 @@
         <div class="summary-stack">
           <div class="summary-item">
             <span>Total Income</span>
-            <strong>{{ income_total }}</strong>
+            <strong class="summary-value income-value">{{ income_total }}</strong>
           </div>
           <div class="summary-item">
             <span>Total Expenses</span>
-            <strong>{{ expense_total }}</strong>
+            <strong class="summary-value expense-value">{{ expense_total }}</strong>
           </div>
           <div class="summary-item">
             <span>Net</span>
-            <strong>{{ net_total }}</strong>
+            <strong class="summary-value {% if net_is_positive %}income-value{% else %}expense-value{% endif %}">{{ net_total }}</strong>
           </div>
           <div class="summary-item">
             <span>Misc Review</span>
@@ -79,7 +81,9 @@
         <input type="hidden" name="period" value="{{ period }}">
         <input type="hidden" name="start" value="{{ start }}">
         <input type="hidden" name="end" value="{{ end }}">
+        {% if period != 'Selected Year' %}
         <input type="hidden" name="selected_year" value="{{ selected_year }}">
+        {% endif %}
         <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
 
         <div class="mode-pills compact-pills">
@@ -101,15 +105,6 @@
             oninput="document.getElementById('window-label').textContent = ['Day','Week','Month','Year'][this.value]"
           >
           <span id="window-label">{{ window_label }}</span>
-        </div>
-
-        <div class="period-control">
-          <label for="period_repeat">Range</label>
-          <select id="period_repeat" name="period" data-auto-submit="change">
-            {% for option in period_options %}
-            <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-          </select>
         </div>
 
         {% if graph_mode == 'category' %}
@@ -159,6 +154,21 @@
       <script>
         document.addEventListener("DOMContentLoaded", function () {
           const form = document.getElementById("chart-controls");
+          const period = document.getElementById("period");
+          const customDates = document.getElementById("custom-dates");
+          const selectedYearWrap = document.getElementById("selected-year-wrap");
+          const syncPeriodUi = function () {
+            if (period && customDates) {
+              customDates.style.display = period.value === "Custom" ? "grid" : "none";
+            }
+            if (period && selectedYearWrap) {
+              selectedYearWrap.style.display = period.value === "Selected Year" ? "block" : "none";
+            }
+          };
+          if (period) {
+            period.addEventListener("change", syncPeriodUi);
+          }
+          syncPeriodUi();
           if (!form) return;
           let timer = null;
           const submitSoon = function (delay) {

@@ -17,19 +17,19 @@
       </div>
       <div class="preview-card">
         {% if source.preview.headers %}
-        <div class="preview-table-wrap">
+        <div class="preview-table-wrap lazy-preview" data-preview-url="/preview/source/{{ source.key }}" data-next-offset="{{ source.preview.rows|length }}" data-limit="20">
           <table class="preview-table">
             <thead>
               <tr>
-                {% for header in source.preview.headers[:4] %}
+                {% for header in source.preview.headers %}
                 <th>{{ header }}</th>
                 {% endfor %}
               </tr>
             </thead>
             <tbody>
-              {% for row in source.preview.rows[:4] %}
+              {% for row in source.preview.rows %}
               <tr>
-                {% for value in row[:4] %}
+                {% for value in row %}
                 <td>{{ value }}</td>
                 {% endfor %}
               </tr>
@@ -64,19 +64,19 @@
       </div>
       <div class="preview-card">
         {% if rule.preview.headers %}
-        <div class="preview-table-wrap">
+        <div class="preview-table-wrap lazy-preview" data-preview-url="/preview/rules/{{ rule.key }}" data-next-offset="{{ rule.preview.rows|length }}" data-limit="20">
           <table class="preview-table">
             <thead>
               <tr>
-                {% for header in rule.preview.headers[:4] %}
+                {% for header in rule.preview.headers %}
                 <th>{{ header }}</th>
                 {% endfor %}
               </tr>
             </thead>
             <tbody>
-              {% for row in rule.preview.rows[:4] %}
+              {% for row in rule.preview.rows %}
               <tr>
-                {% for value in row[:4] %}
+                {% for value in row %}
                 <td>{{ value }}</td>
                 {% endfor %}
               </tr>
@@ -99,4 +99,44 @@
     {% endfor %}
   </div>
 </section>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".lazy-preview").forEach(function (container) {
+      let loading = false;
+      let nextOffset = container.dataset.nextOffset ? Number(container.dataset.nextOffset) : null;
+      const limit = Number(container.dataset.limit || 20);
+      const tbody = container.querySelector("tbody");
+      const appendRows = function (rows) {
+        rows.forEach(function (row) {
+          const tr = document.createElement("tr");
+          row.forEach(function (value) {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      };
+      const loadMore = function () {
+        if (loading || nextOffset === null) return;
+        loading = true;
+        fetch(container.dataset.previewUrl + "?offset=" + nextOffset + "&limit=" + limit)
+          .then(function (response) { return response.json(); })
+          .then(function (payload) {
+            if (!payload.ok) return;
+            appendRows(payload.rows || []);
+            nextOffset = payload.next_offset;
+          })
+          .finally(function () {
+            loading = false;
+          });
+      };
+      container.addEventListener("scroll", function () {
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 24) {
+          loadMore();
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}

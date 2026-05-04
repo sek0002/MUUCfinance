@@ -255,7 +255,7 @@ def merge_csv_bytes(existing_path: Path, uploaded_bytes: bytes) -> tuple[int, in
     return added_rows, skipped_rows
 
 
-def preview_csv(path: Path, rows: int = 5) -> dict[str, Any]:
+def preview_csv(path: Path, rows: int = 12) -> dict[str, Any]:
     if not path.exists():
         return {"headers": [], "rows": [], "row_count": 0}
     try:
@@ -267,6 +267,25 @@ def preview_csv(path: Path, rows: int = 5) -> dict[str, Any]:
         "headers": [str(column) for column in preview.columns.tolist()],
         "rows": [[str(value) for value in row] for row in preview.values.tolist()],
         "row_count": int(len(df.index)),
+    }
+
+
+def preview_frame_page(path: Path, offset: int, limit: int) -> dict[str, Any]:
+    if not path.exists():
+        return {"headers": [], "rows": [], "row_count": 0, "next_offset": None}
+    try:
+        df = pd.read_csv(path).fillna("")
+    except Exception:
+        return {"headers": [], "rows": [], "row_count": 0, "next_offset": None}
+    offset = max(offset, 0)
+    limit = max(min(limit, 100), 1)
+    page = df.iloc[offset : offset + limit]
+    next_offset = offset + len(page.index)
+    return {
+        "headers": [str(column) for column in df.columns.tolist()],
+        "rows": [[str(value) for value in row] for row in page.values.tolist()],
+        "row_count": int(len(df.index)),
+        "next_offset": next_offset if next_offset < len(df.index) else None,
     }
 
 
@@ -412,6 +431,23 @@ def aggregate_series(frame: pd.DataFrame, window_key: str) -> pd.Series:
     return out.groupby("bucket")["amount"].sum().sort_index()
 
 
+def format_bucket_label(bucket: str, window_key: str) -> str:
+    try:
+        if window_key == "day":
+            return pd.to_datetime(bucket, errors="raise").strftime("%y-%m-%d")
+        if window_key == "week":
+            start_text = str(bucket).split("/")[0]
+            return pd.to_datetime(start_text, errors="raise").strftime("%y-%m-%d")
+        if window_key == "month":
+            return pd.Period(bucket, freq="M").strftime("%y-%m")
+        if window_key == "year":
+            dt = pd.to_datetime(f"{bucket}-01-01", errors="raise")
+            return dt.strftime("%y")
+    except Exception:
+        return str(bucket)
+    return str(bucket)
+
+
 def svg_tooltip_script() -> str:
     return """
     <script>
@@ -438,13 +474,13 @@ def svg_tooltip_script() -> str:
     """
 
 
-def build_line_chart_svg(series_map: dict[str, pd.Series], title: str) -> str:
+def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
     width = 1160
     height = 380
     margin_left = 64
     margin_right = 32
     margin_top = 28
-    margin_bottom = 54
+    margin_bottom = 76
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -479,7 +515,10 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str) -> str:
     for index, label in enumerate(labels):
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
         if index < 8 or index == len(labels) - 1 or index % max(len(labels) // 6, 1) == 0:
-            parts.append(f'<text x="{x:.1f}" y="{height - 18}" text-anchor="middle" class="axis-label">{html.escape(label)}</text>')
+            display_label = format_bucket_label(label, window_key)
+            parts.append(
+                f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
+            )
 
     legend_x = margin_left
     for idx, (series_name, series) in enumerate(active_series.items()):
@@ -517,18 +556,18 @@ def pie_arc(cx: float, cy: float, radius: float, start_angle: float, end_angle: 
 def build_pie_svg(income_series: pd.Series, expense_series: pd.Series) -> str:
     import math
 
-    width = 1160
+    width = 1240
     legend_count = max(len([value for value in income_series.values if float(value) > 0]), len([value for value in expense_series.values if float(value) > 0]), 1)
-    height = max(360, 88 + (legend_count * 22))
+    height = max(420, 92 + (legend_count * 24))
     colors = ["#00a67e", "#3b82f6", "#635bff", "#f59e0b", "#db5b7b", "#0ea5e9", "#a855f7", "#14b8a6", "#64748b"]
-    sections = [("Income", income_series, 72), ("Expenses", expense_series, 620)]
+    sections = [("Income", income_series, 56), ("Expenses", expense_series, 650)]
     parts = [f'<svg class="chart-svg pie-svg" viewBox="0 0 {width} {height}" role="img" aria-label="Income and expense pie charts">']
     for title, series, panel_x in sections:
         total = float(series.sum()) if not series.empty else 0.0
-        center_x = panel_x + 118
-        legend_x = panel_x + 264
-        center_y = min(max(height / 2, 158), 200)
-        radius = 92
+        center_x = panel_x + 150
+        legend_x = panel_x + 330
+        center_y = min(max(height / 2, 186), 236)
+        radius = 122
         parts.append(f'<text x="{panel_x}" y="30" class="chart-title">{html.escape(title)}</text>')
         if total <= 0:
             parts.append(f'<text x="{panel_x}" y="64" class="axis-label">No data</text>')
@@ -544,14 +583,14 @@ def build_pie_svg(income_series: pd.Series, expense_series: pd.Series) -> str:
             path = pie_arc(center_x, center_y, radius, start, end)
             parts.append(f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="2" data-tooltip="{html.escape(tooltip)}" />')
             start = end
-        legend_y = 62
+        legend_y = 58
         visible_items = [(category, amount) for category, amount in series.items() if float(amount) > 0]
         for idx, (category, amount) in enumerate(visible_items):
             if float(amount) <= 0:
                 continue
             color = colors[idx % len(colors)]
             tooltip = f"{title} | {category} | {currency(float(amount))}"
-            y = legend_y + idx * 22
+            y = legend_y + idx * 24
             parts.append(f'<rect x="{legend_x}" y="{y}" width="12" height="12" rx="3" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
             parts.append(f'<text x="{legend_x + 18}" y="{y + 10}" class="legend-label">{html.escape(category)} {html.escape(currency(float(amount)))}</text>')
     parts.append("</svg>")
@@ -752,6 +791,7 @@ def dashboard_context(
                 "Expenses": aggregate_series(filtered_expenses, window_key),
             },
             chart_title,
+            window_key,
         )
     elif graph_mode_value == "category":
         income_category_frame = apply_focus(filtered_income, line_category_value if line_category_value in INCOME_CATEGORIES else "all")
@@ -763,6 +803,7 @@ def dashboard_context(
                 "Expenses": aggregate_series(expense_category_frame, window_key),
             },
             chart_title,
+            window_key,
         )
     else:
         chart_title = "Pie Breakdown"
@@ -788,6 +829,7 @@ def dashboard_context(
         "income_total": currency(float(filtered_income["amount"].sum())) if not filtered_income.empty else currency(0.0),
         "expense_total": currency(float(filtered_expenses["amount"].sum())) if not filtered_expenses.empty else currency(0.0),
         "net_total": currency(float(filtered_income["amount"].sum()) - float(filtered_expenses["amount"].sum())),
+        "net_is_positive": (float(filtered_income["amount"].sum()) - float(filtered_expenses["amount"].sum())) >= 0,
         "misc_count": len(filter_frame(bundle.misc_income, start, end)) + len(filter_frame(bundle.misc_expenses, start, end)),
         "income_rows": category_rows(income_summary),
         "expense_rows": category_rows(expense_summary),
@@ -1053,6 +1095,33 @@ def download_rules(request: Request, rule_key: str) -> StreamingResponse:
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
     )
+
+
+@app.get("/preview/{kind}/{item_key}")
+def preview_rows(
+    request: Request,
+    kind: str,
+    item_key: str,
+    offset: int = Query(0),
+    limit: int = Query(20),
+) -> JSONResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    if kind == "source":
+        if item_key not in SOURCE_KEYS:
+            raise HTTPException(status_code=404, detail="Unknown source key")
+        path = current_source_paths(request)[item_key]
+    elif kind == "rules":
+        if item_key not in RULE_FILE_MAP:
+            raise HTTPException(status_code=404, detail="Unknown rule key")
+        path = current_rule_paths(request)[0] if item_key == "income" else current_rule_paths(request)[1]
+    else:
+        raise HTTPException(status_code=404, detail="Unknown preview kind")
+
+    payload = preview_frame_page(path, offset, limit)
+    return JSONResponse({"ok": True, **payload})
 
 
 @app.get("/transactions/export")
