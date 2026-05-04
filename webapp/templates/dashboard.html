@@ -26,7 +26,10 @@
       <article class="panel compact-filter-card">
         <form method="get" action="/dashboard" class="filter-stack">
           <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
-          <input type="hidden" name="line_category" value="{{ line_category }}">
+          <input type="hidden" name="chart_style" value="{{ chart_style }}">
+          {% for category in line_categories_selected %}
+          <input type="hidden" name="line_category" value="{{ category }}">
+          {% endfor %}
           <input type="hidden" name="window_scale" value="{{ window_scale }}">
           {% for category in pie_categories_selected %}
           <input type="hidden" name="pie_categories" value="{{ category }}">
@@ -85,12 +88,25 @@
         <input type="hidden" name="selected_year" value="{{ selected_year }}">
         {% endif %}
         <input type="hidden" name="graph_mode" value="{{ graph_mode }}">
+        {% if graph_mode == 'pie' %}
+        <input type="hidden" name="chart_style" value="{{ chart_style }}">
+        {% endif %}
 
         <div class="mode-pills compact-pills">
           <a href="{{ graph_mode_links['totals'] }}" class="nav-pill compact-pill{% if graph_mode == 'totals' %} active{% endif %}">Totals</a>
           <a href="{{ graph_mode_links['category'] }}" class="nav-pill compact-pill{% if graph_mode == 'category' %} active{% endif %}">By Category</a>
           <a href="{{ graph_mode_links['pie'] }}" class="nav-pill compact-pill{% if graph_mode == 'pie' %} active{% endif %}">Pie Breakdown</a>
         </div>
+
+        {% if graph_mode != 'pie' %}
+        <div class="category-select">
+          <label for="chart_style">Plot</label>
+          <select id="chart_style" name="chart_style" data-auto-submit="change">
+            <option value="line" {% if chart_style == 'line' %}selected{% endif %}>Line</option>
+            <option value="bar" {% if chart_style == 'bar' %}selected{% endif %}>Bar</option>
+          </select>
+        </div>
+        {% endif %}
 
         <div class="window-control">
           <label for="window_scale">Window</label>
@@ -108,16 +124,24 @@
         </div>
 
         {% if graph_mode == 'category' %}
-        <div class="category-select">
-          <label for="line_category">Category</label>
-          <select id="line_category" name="line_category" data-auto-submit="change">
-            {% for category in all_categories %}
-            <option value="{{ category }}" {% if category == line_category %}selected{% endif %}>{{ category }}</option>
-            {% endfor %}
-          </select>
+        <div class="pie-filter-menu">
+          <label class="toolbar-label">Categories</label>
+          <details class="filter-menu-dropdown">
+            <summary>{{ line_categories_selected | length }} selected</summary>
+            <div class="pie-filter-grid">
+              {% for category in all_categories %}
+              <label class="filter-check{% if category in line_categories_selected %} active{% endif %}">
+                <input type="checkbox" name="line_category" value="{{ category }}" {% if category in line_categories_selected %}checked{% endif %} data-auto-submit="change">
+                <span>{{ category }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </details>
         </div>
         {% else %}
-        <input type="hidden" name="line_category" value="{{ line_category }}">
+          {% for category in line_categories_selected %}
+          <input type="hidden" name="line_category" value="{{ category }}">
+          {% endfor %}
         {% endif %}
 
         {% if graph_mode == 'pie' %}
@@ -147,8 +171,59 @@
         </div>
       </form>
 
-      <div class="chart-frame">
-        {{ chart_svg | safe }}
+      <div class="chart-frame{% if show_chart_detail_table %} has-detail{% endif %}">
+        {% if show_chart_detail_table %}
+        <div class="chart-layout">
+          <div class="chart-visual">
+            {{ chart_svg | safe }}
+          </div>
+          <aside class="chart-detail-panel">
+            <div class="panel-head tight chart-detail-head">
+              <h2>{{ chart_detail_title }}</h2>
+            </div>
+            {% if chart_detail_rows %}
+            <div class="table-wrap chart-detail-wrap">
+              <table class="chart-detail-table" data-sortable-table>
+                <thead>
+                  <tr>
+                    {% for column in chart_detail_columns %}
+                    <th{% if column.numeric %} class="amount"{% endif %}>
+                      <button
+                        type="button"
+                        class="sort-button{% if column.numeric %} amount{% endif %}"
+                        data-sort-key="{{ column.sort_key }}"
+                        data-sort-numeric="{{ column.numeric }}"
+                      >
+                        {{ column.label }}
+                      </button>
+                    </th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in chart_detail_rows %}
+                  <tr>
+                    {% for column in chart_detail_columns %}
+                    <td
+                      {% if column.numeric %}class="amount"{% endif %}
+                      data-sort-value="{{ row[column.sort_key] }}"
+                    >
+                      {{ row[column.key] }}
+                    </td>
+                    {% endfor %}
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <p class="muted">No rows for the current selection.</p>
+            {% endif %}
+          </aside>
+        </div>
+        {% else %}
+          {{ chart_svg | safe }}
+        {% endif %}
       </div>
       {{ chart_tooltip_script | safe }}
       <script>
@@ -188,6 +263,44 @@
             });
             node.addEventListener("input", function () {
               submitSoon(180);
+            });
+          });
+
+          document.querySelectorAll("[data-sortable-table]").forEach(function (table) {
+            const tbody = table.querySelector("tbody");
+            if (!tbody) return;
+            table.querySelectorAll(".sort-button").forEach(function (button) {
+              button.addEventListener("click", function () {
+                const key = button.dataset.sortKey;
+                const numeric = button.dataset.sortNumeric === "1";
+                const current = button.dataset.direction === "asc" ? "asc" : "desc";
+                const next = current === "asc" ? "desc" : "asc";
+                const buttons = Array.from(table.querySelectorAll(".sort-button"));
+                const columnIndex = buttons.findIndex(function (node) {
+                  return node.dataset.sortKey === key;
+                });
+                if (columnIndex < 0) return;
+                table.querySelectorAll(".sort-button").forEach(function (other) {
+                  if (other !== button) {
+                    other.dataset.direction = "";
+                  }
+                });
+                button.dataset.direction = next;
+                const rows = Array.from(tbody.querySelectorAll("tr"));
+                rows.sort(function (a, b) {
+                  const aValue = a.children[columnIndex];
+                  const bValue = b.children[columnIndex];
+                  const av = aValue ? aValue.dataset.sortValue || "" : "";
+                  const bv = bValue ? bValue.dataset.sortValue || "" : "";
+                  if (numeric) {
+                    return next === "asc" ? Number(av) - Number(bv) : Number(bv) - Number(av);
+                  }
+                  return next === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+                });
+                rows.forEach(function (row) {
+                  tbody.appendChild(row);
+                });
+              });
             });
           });
         });

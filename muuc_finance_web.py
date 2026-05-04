@@ -349,7 +349,8 @@ def dashboard_base_params(
     end_text: str,
     selected_year: int,
     graph_mode: str,
-    line_category: str,
+    chart_style: str,
+    line_categories: list[str],
     window_scale: int,
     pie_categories: list[str],
 ) -> list[tuple[str, str]]:
@@ -359,9 +360,10 @@ def dashboard_base_params(
         ("end", end_text),
         ("selected_year", str(selected_year)),
         ("graph_mode", graph_mode),
-        ("line_category", line_category),
+        ("chart_style", chart_style),
         ("window_scale", str(window_scale)),
     ]
+    params.extend([("line_category", category) for category in line_categories])
     params.extend([("pie_categories", category) for category in pie_categories])
     return params
 
@@ -372,11 +374,12 @@ def dashboard_url(
     end_text: str,
     selected_year: int,
     graph_mode: str,
-    line_category: str,
+    chart_style: str,
+    line_categories: list[str],
     window_scale: int,
     pie_categories: list[str],
 ) -> str:
-    params = dashboard_base_params(period, start_text, end_text, selected_year, graph_mode, line_category, window_scale, pie_categories)
+    params = dashboard_base_params(period, start_text, end_text, selected_year, graph_mode, chart_style, line_categories, window_scale, pie_categories)
     return f"/dashboard?{urlencode(params)}"
 
 
@@ -434,18 +437,34 @@ def aggregate_series(frame: pd.DataFrame, window_key: str) -> pd.Series:
 def format_bucket_label(bucket: str, window_key: str) -> str:
     try:
         if window_key == "day":
-            return pd.to_datetime(bucket, errors="raise").strftime("%y-%m-%d")
+            return pd.to_datetime(bucket, errors="raise").strftime("%d-%m-%Y")
         if window_key == "week":
             start_text = str(bucket).split("/")[0]
-            return pd.to_datetime(start_text, errors="raise").strftime("%y-%m-%d")
+            return pd.to_datetime(start_text, errors="raise").strftime("%d-%m-%Y")
         if window_key == "month":
-            return pd.Period(bucket, freq="M").strftime("%y-%m")
+            return pd.Period(bucket, freq="M").start_time.strftime("%d-%m-%Y")
         if window_key == "year":
             dt = pd.to_datetime(f"{bucket}-01-01", errors="raise")
-            return dt.strftime("%y")
+            return dt.strftime("%d-%m-%Y")
     except Exception:
         return str(bucket)
     return str(bucket)
+
+
+def bucket_year_label(bucket: str, window_key: str) -> str:
+    try:
+        if window_key == "day":
+            return pd.to_datetime(bucket, errors="raise").strftime("%Y")
+        if window_key == "week":
+            start_text = str(bucket).split("/")[0]
+            return pd.to_datetime(start_text, errors="raise").strftime("%Y")
+        if window_key == "month":
+            return str(pd.Period(bucket, freq="M").year)
+        if window_key == "year":
+            return str(bucket)
+    except Exception:
+        return str(bucket)[:4]
+    return str(bucket)[:4]
 
 
 def svg_tooltip_script() -> str:
@@ -476,11 +495,11 @@ def svg_tooltip_script() -> str:
 
 def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
     width = 1160
-    height = 380
+    height = 360
     margin_left = 64
     margin_right = 32
-    margin_top = 28
-    margin_bottom = 76
+    margin_top = 42
+    margin_bottom = 58
     colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
     active_series = {label: series for label, series in series_map.items() if not series.empty}
     if not active_series:
@@ -498,8 +517,7 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
     plot_height = height - margin_top - margin_bottom
 
     parts = [
-        f'<svg class="chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
-        f'<text x="{margin_left}" y="18" class="chart-title">{html.escape(title)}</text>',
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
         f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
         f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
     ]
@@ -514,13 +532,40 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
     x_step = plot_width / max(len(labels) - 1, 1)
     for index, label in enumerate(labels):
         x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
-        if index < 8 or index == len(labels) - 1 or index % max(len(labels) // 6, 1) == 0:
-            display_label = format_bucket_label(label, window_key)
+        display_label = format_bucket_label(label, window_key)
+        parts.append(
+            f'<text x="{x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 14})" class="axis-label">{html.escape(display_label)}</text>'
+        )
+
+    if window_key != "year" and labels:
+        year_groups: list[tuple[str, int, int]] = []
+        current_year = bucket_year_label(labels[0], window_key)
+        group_start = 0
+        for index, label in enumerate(labels[1:], start=1):
+            year = bucket_year_label(label, window_key)
+            if year != current_year:
+                year_groups.append((current_year, group_start, index - 1))
+                current_year = year
+                group_start = index
+        year_groups.append((current_year, group_start, len(labels) - 1))
+
+        inset_y = margin_top + plot_height + 10
+        inset_height = 18
+        for year, start_index, end_index in year_groups:
+            start_x = margin_left + (start_index * x_step if len(labels) > 1 else plot_width / 2)
+            end_x = margin_left + (end_index * x_step if len(labels) > 1 else plot_width / 2)
+            inset_x = max(margin_left, start_x - 18)
+            inset_width = max((end_x - start_x) + 36, 58)
             parts.append(
-                f'<text x="{x:.1f}" y="{height - 18}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 18})" class="axis-label">{html.escape(display_label)}</text>'
+                f'<rect x="{inset_x:.1f}" y="{inset_y:.1f}" width="{inset_width:.1f}" height="{inset_height}" rx="9" class="year-inset" />'
+            )
+            parts.append(
+                f'<text x="{(inset_x + inset_width / 2):.1f}" y="{inset_y + 12:.1f}" text-anchor="middle" class="year-inset-label">{html.escape(year)}</text>'
             )
 
-    legend_x = margin_left
+    legend_x = width - margin_right - (150 * len(active_series))
+    legend_x = max(legend_x, margin_left + 280)
+    legend_y = 22
     for idx, (series_name, series) in enumerate(active_series.items()):
         color = colors[idx % len(colors)]
         points = []
@@ -534,9 +579,375 @@ def build_line_chart_svg(series_map: dict[str, pd.Series], title: str, window_ke
         for x, y, value, label in points:
             tooltip = f"{series_name} | {label} | {currency(value)}"
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
-        parts.append(f'<circle cx="{legend_x}" cy="{height - 8}" r="5" fill="{color}" />')
-        parts.append(f'<text x="{legend_x + 12}" y="{height - 4}" class="legend-label">{html.escape(series_name)}</text>')
+        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="5" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 12}" y="{legend_y + 4}" class="legend-label">{html.escape(series_name)}</text>')
         legend_x += 150
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def build_bar_chart_svg(series_map: dict[str, pd.Series], title: str, window_key: str) -> str:
+    width = 1160
+    height = 360
+    margin_left = 64
+    margin_right = 32
+    margin_top = 42
+    margin_bottom = 58
+    colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9"]
+    active_series = {label: series for label, series in series_map.items() if not series.empty}
+    if not active_series:
+        return '<div class="chart-empty">No data in the selected range.</div>'
+
+    labels = []
+    for series in active_series.values():
+        for label in series.index.tolist():
+            if label not in labels:
+                labels.append(label)
+    labels = sorted(labels)
+    max_value = max(float(series.max()) for series in active_series.values()) if active_series else 1.0
+    max_value = max(max_value, 1.0)
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    group_width = plot_width / max(len(labels), 1)
+    inner_width = min(group_width * 0.78, 64)
+    series_count = max(len(active_series), 1)
+    bar_width = max(inner_width / series_count, 10)
+
+    parts = [
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
+    ]
+
+    for tick in range(5):
+        ratio = tick / 4
+        y = margin_top + plot_height - (plot_height * ratio)
+        value = max_value * ratio
+        parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
+        parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
+
+    for index, label in enumerate(labels):
+        group_start = margin_left + (index * group_width)
+        center_x = group_start + group_width / 2
+        display_label = format_bucket_label(label, window_key)
+        parts.append(
+            f'<text x="{center_x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 14})" class="axis-label">{html.escape(display_label)}</text>'
+        )
+
+    if window_key != "year" and labels:
+        year_groups: list[tuple[str, int, int]] = []
+        current_year = bucket_year_label(labels[0], window_key)
+        group_start_index = 0
+        for index, label in enumerate(labels[1:], start=1):
+            year = bucket_year_label(label, window_key)
+            if year != current_year:
+                year_groups.append((current_year, group_start_index, index - 1))
+                current_year = year
+                group_start_index = index
+        year_groups.append((current_year, group_start_index, len(labels) - 1))
+
+        inset_y = margin_top + plot_height + 10
+        inset_height = 18
+        for year, start_index, end_index in year_groups:
+            start_x = margin_left + (start_index * group_width)
+            end_x = margin_left + ((end_index + 1) * group_width)
+            inset_x = max(margin_left, start_x + 2)
+            inset_width = max((end_x - start_x) - 4, 58)
+            parts.append(f'<rect x="{inset_x:.1f}" y="{inset_y:.1f}" width="{inset_width:.1f}" height="{inset_height}" rx="9" class="year-inset" />')
+            parts.append(f'<text x="{(inset_x + inset_width / 2):.1f}" y="{inset_y + 12:.1f}" text-anchor="middle" class="year-inset-label">{html.escape(year)}</text>')
+
+    legend_x = width - margin_right - (150 * len(active_series))
+    legend_x = max(legend_x, margin_left + 280)
+    legend_y = 22
+    for series_idx, (series_name, series) in enumerate(active_series.items()):
+        color = colors[series_idx % len(colors)]
+        for label_idx, label in enumerate(labels):
+            value = float(series.get(label, 0.0))
+            group_start = margin_left + (label_idx * group_width)
+            bars_total_width = bar_width * series_count
+            start_x = group_start + (group_width - bars_total_width) / 2
+            x = start_x + (series_idx * bar_width)
+            bar_height = 0 if max_value <= 0 else (value / max_value) * plot_height
+            y = margin_top + plot_height - bar_height
+            tooltip = f"{series_name} | {label} | {currency(value)}"
+            parts.append(
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{max(bar_width - 3, 6):.1f}" height="{max(bar_height, 1):.1f}" rx="4" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
+            )
+        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="5" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 12}" y="{legend_y + 4}" class="legend-label">{html.escape(series_name)}</text>')
+        legend_x += 150
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def build_category_summary_line_chart_svg(income_totals: pd.Series, expense_totals: pd.Series, title: str) -> str:
+    width = 1160
+    height = 360
+    margin_left = 64
+    margin_right = 32
+    margin_top = 42
+    margin_bottom = 58
+    colors = {"Income": "#00a67e", "Expenses": "#db5b7b"}
+    labels = list(dict.fromkeys(list(income_totals.index) + list(expense_totals.index)))
+    if not labels:
+        return '<div class="chart-empty">No data in the selected range.</div>'
+
+    max_value = max(
+        float(income_totals.max()) if not income_totals.empty else 0.0,
+        float(expense_totals.max()) if not expense_totals.empty else 0.0,
+        1.0,
+    )
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    x_step = plot_width / max(len(labels) - 1, 1)
+
+    parts = [
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
+    ]
+
+    for tick in range(5):
+        ratio = tick / 4
+        y = margin_top + plot_height - (plot_height * ratio)
+        value = max_value * ratio
+        parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
+        parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
+
+    def add_series(series_name: str, series: pd.Series) -> None:
+        color = colors[series_name]
+        points = []
+        for label_idx, label in enumerate(labels):
+            value = float(series.get(label, 0.0))
+            x = margin_left + (label_idx * x_step if len(labels) > 1 else plot_width / 2)
+            y = margin_top + plot_height - ((value / max_value) * plot_height)
+            points.append((x, y, value, label))
+        path_data = " ".join([f"{'M' if i == 0 else 'L'} {x:.1f} {y:.1f}" for i, (x, y, _value, _label) in enumerate(points)])
+        parts.append(f'<path d="{path_data}" fill="none" stroke="{color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />')
+        for x, y, value, label in points:
+            tooltip = f"{series_name} | {label} | {currency(value)}"
+            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{color}" data-tooltip="{html.escape(tooltip)}" />')
+
+    for index, label in enumerate(labels):
+        x = margin_left + (index * x_step if len(labels) > 1 else plot_width / 2)
+        parts.append(
+            f'<text x="{x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {x:.1f} {height - 14})" class="axis-label">{html.escape(str(label))}</text>'
+        )
+
+    add_series("Income", income_totals)
+    add_series("Expenses", expense_totals)
+
+    legend_x = width - margin_right - 300
+    legend_x = max(legend_x, margin_left + 280)
+    legend_y = 22
+    for series_name in ["Income", "Expenses"]:
+        color = colors[series_name]
+        parts.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="5" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 12}" y="{legend_y + 4}" class="legend-label">{html.escape(series_name)}</text>')
+        legend_x += 150
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def build_category_stacked_bar_svg(income_totals: pd.Series, expense_totals: pd.Series, title: str) -> str:
+    width = 1160
+    height = 360
+    margin_left = 64
+    margin_right = 32
+    margin_top = 42
+    margin_bottom = 58
+    colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
+
+    income_segments = [(label, float(income_totals.get(label, 0.0))) for label in income_totals.index.tolist() if float(income_totals.get(label, 0.0)) > 0]
+    expense_segments = [(label, float(expense_totals.get(label, 0.0))) for label in expense_totals.index.tolist() if float(expense_totals.get(label, 0.0)) > 0]
+    if not income_segments and not expense_segments:
+        return '<div class="chart-empty">No data in the selected range.</div>'
+
+    income_total = sum(value for _label, value in income_segments)
+    expense_total = sum(value for _label, value in expense_segments)
+    max_value = max(income_total, expense_total, 1.0)
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    group_labels = ["Income", "Expenses"]
+    group_width = plot_width / len(group_labels)
+    bar_width = min(group_width * 0.4, 120)
+
+    parts = [
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
+    ]
+
+    for tick in range(5):
+        ratio = tick / 4
+        y = margin_top + plot_height - (plot_height * ratio)
+        value = max_value * ratio
+        parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
+        parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
+
+    def draw_stack(group_index: int, group_name: str, segments: list[tuple[str, float]]) -> None:
+        center_x = margin_left + (group_width * group_index) + (group_width / 2)
+        x = center_x - (bar_width / 2)
+        running_height = 0.0
+        for idx, (label, value) in enumerate(segments):
+            segment_height = 0 if max_value <= 0 else (value / max_value) * plot_height
+            y = margin_top + plot_height - running_height - segment_height
+            color = colors[idx % len(colors)]
+            tooltip = f"{group_name} | {label} | {currency(value)}"
+            parts.append(
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(segment_height, 1):.1f}" rx="6" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
+            )
+            running_height += segment_height
+        parts.append(f'<text x="{center_x:.1f}" y="{height - 14}" text-anchor="middle" class="axis-label">{html.escape(group_name)}</text>')
+
+    draw_stack(0, "Income", income_segments)
+    draw_stack(1, "Expenses", expense_segments)
+
+    legend_x = width - margin_right - 180
+    legend_x = max(legend_x, margin_left + 280)
+    legend_y = 18
+    legend_step = 20
+    legend_items = income_segments if income_segments else expense_segments
+    for idx, (label, _value) in enumerate(legend_items):
+        color = colors[idx % len(colors)]
+        row_y = legend_y + (idx * legend_step)
+        parts.append(f'<rect x="{legend_x}" y="{row_y - 8}" width="10" height="10" rx="2" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 16}" y="{row_y + 1}" class="legend-label">{html.escape(label)}</text>')
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def build_time_stacked_category_bar_svg(
+    income_series_map: dict[str, pd.Series],
+    expense_series_map: dict[str, pd.Series],
+    title: str,
+    window_key: str,
+) -> str:
+    width = 1160
+    height = 360
+    margin_left = 64
+    margin_right = 32
+    margin_top = 42
+    margin_bottom = 58
+    colors = ["#00a67e", "#db5b7b", "#635bff", "#0ea5e9", "#f59e0b", "#a855f7", "#14b8a6", "#ef4444"]
+
+    labels = []
+    for series in list(income_series_map.values()) + list(expense_series_map.values()):
+        for label in series.index.tolist():
+            if label not in labels:
+                labels.append(label)
+    labels = sorted(labels)
+    if not labels:
+        return '<div class="chart-empty">No data in the selected range.</div>'
+
+    income_totals = {label: sum(float(series.get(label, 0.0)) for series in income_series_map.values()) for label in labels}
+    expense_totals = {label: sum(float(series.get(label, 0.0)) for series in expense_series_map.values()) for label in labels}
+    max_value = max(
+        max(income_totals.values()) if income_totals else 0.0,
+        max(expense_totals.values()) if expense_totals else 0.0,
+        1.0,
+    )
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    group_width = plot_width / max(len(labels), 1)
+    bar_width = min(group_width * 0.26, 34)
+    pair_gap = min(group_width * 0.1, 10)
+
+    parts = [
+        f'<svg class="chart-svg line-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" class="axis-line" />',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />',
+    ]
+
+    for tick in range(5):
+        ratio = tick / 4
+        y = margin_top + plot_height - (plot_height * ratio)
+        value = max_value * ratio
+        parts.append(f'<line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />')
+        parts.append(f'<text x="{margin_left - 12}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(currency(value))}</text>')
+
+    for index, label in enumerate(labels):
+        group_start = margin_left + (index * group_width)
+        center_x = group_start + group_width / 2
+        display_label = format_bucket_label(label, window_key)
+        parts.append(
+            f'<text x="{center_x:.1f}" y="{height - 14}" text-anchor="end" transform="rotate(-45 {center_x:.1f} {height - 14})" class="axis-label">{html.escape(display_label)}</text>'
+        )
+
+    if window_key != "year" and labels:
+        year_groups: list[tuple[str, int, int]] = []
+        current_year = bucket_year_label(labels[0], window_key)
+        group_start_index = 0
+        for index, label in enumerate(labels[1:], start=1):
+            year = bucket_year_label(label, window_key)
+            if year != current_year:
+                year_groups.append((current_year, group_start_index, index - 1))
+                current_year = year
+                group_start_index = index
+        year_groups.append((current_year, group_start_index, len(labels) - 1))
+
+        inset_y = margin_top + plot_height + 10
+        inset_height = 18
+        for year, start_index, end_index in year_groups:
+            start_x = margin_left + (start_index * group_width)
+            end_x = margin_left + ((end_index + 1) * group_width)
+            inset_x = max(margin_left, start_x + 2)
+            inset_width = max((end_x - start_x) - 4, 58)
+            parts.append(f'<rect x="{inset_x:.1f}" y="{inset_y:.1f}" width="{inset_width:.1f}" height="{inset_height}" rx="9" class="year-inset" />')
+            parts.append(f'<text x="{(inset_x + inset_width / 2):.1f}" y="{inset_y + 12:.1f}" text-anchor="middle" class="year-inset-label">{html.escape(year)}</text>')
+
+    income_items = list(income_series_map.items())
+    expense_items = list(expense_series_map.items())
+
+    for label_index, label in enumerate(labels):
+        group_start = margin_left + (label_index * group_width)
+        center_x = group_start + group_width / 2
+        income_x = center_x - bar_width - (pair_gap / 2)
+        expense_x = center_x + (pair_gap / 2)
+
+        running_height = 0.0
+        for idx, (series_name, series) in enumerate(income_items):
+            value = float(series.get(label, 0.0))
+            if value <= 0:
+                continue
+            segment_height = (value / max_value) * plot_height
+            y = margin_top + plot_height - running_height - segment_height
+            color = colors[idx % len(colors)]
+            tooltip = f"{series_name} | {label} | {currency(value)}"
+            parts.append(
+                f'<rect x="{income_x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(segment_height, 1):.1f}" rx="4" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
+            )
+            running_height += segment_height
+
+        running_height = 0.0
+        for idx, (series_name, series) in enumerate(expense_items):
+            value = float(series.get(label, 0.0))
+            if value <= 0:
+                continue
+            segment_height = (value / max_value) * plot_height
+            y = margin_top + plot_height - running_height - segment_height
+            color = colors[(idx + len(income_items)) % len(colors)]
+            tooltip = f"{series_name} | {label} | {currency(value)}"
+            parts.append(
+                f'<rect x="{expense_x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(segment_height, 1):.1f}" rx="4" fill="{color}" data-tooltip="{html.escape(tooltip)}" />'
+            )
+            running_height += segment_height
+
+    legend_x = width - margin_right - 220
+    legend_x = max(legend_x, margin_left + 280)
+    legend_y = 18
+    legend_step = 18
+    legend_items = [(name, colors[idx % len(colors)]) for idx, (name, _series) in enumerate(income_items)] + [
+        (name, colors[(idx + len(income_items)) % len(colors)]) for idx, (name, _series) in enumerate(expense_items)
+    ]
+    for idx, (label, color) in enumerate(legend_items):
+        row_y = legend_y + (idx * legend_step)
+        parts.append(f'<rect x="{legend_x}" y="{row_y - 8}" width="10" height="10" rx="2" fill="{color}" />')
+        parts.append(f'<text x="{legend_x + 16}" y="{row_y + 1}" class="legend-label">{html.escape(label)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)
@@ -664,6 +1075,61 @@ def category_subgroup_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list
     return rows
 
 
+def chart_totals_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, window_key: str) -> list[dict[str, Any]]:
+    income_series = aggregate_series(income, window_key)
+    expense_series = aggregate_series(expenses, window_key)
+    labels = list(dict.fromkeys(list(income_series.index) + list(expense_series.index)))
+    labels = sorted(labels)
+    rows: list[dict[str, Any]] = []
+    for label in labels:
+        income_value = float(income_series.get(label, 0.0))
+        expense_value = float(expense_series.get(label, 0.0))
+        rows.append(
+            {
+                "period": format_bucket_label(label, window_key),
+                "income": currency(income_value),
+                "expenses": currency(expense_value),
+                "net": currency(income_value - expense_value),
+                "_sort_period": label,
+                "_sort_income": income_value,
+                "_sort_expenses": expense_value,
+                "_sort_net": income_value - expense_value,
+            }
+        )
+    return rows
+
+
+def chart_category_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, selected_categories: list[str]) -> list[dict[str, Any]]:
+    allowed = requested_categories(selected_categories)
+    income_allowed = [category for category in allowed if category in INCOME_CATEGORIES]
+    expense_allowed = [category for category in allowed if category in EXPENSE_CATEGORIES]
+    income_frame = income[income["category"].isin(income_allowed)].copy() if income_allowed else pd.DataFrame(columns=income.columns)
+    expense_frame = expenses[expenses["category"].isin(expense_allowed)].copy() if expense_allowed else pd.DataFrame(columns=expenses.columns)
+    rows: list[dict[str, Any]] = []
+    combined = pd.concat([income_frame, expense_frame], ignore_index=True, sort=False)
+    if combined.empty:
+        return rows
+    ordered = combined.sort_values(["date", "category", "amount"], ascending=[False, True, False]).head(300)
+    for _, row in ordered.iterrows():
+        dt = pd.to_datetime(row.get("date"), errors="coerce")
+        amount_value = float(row.get("amount", 0.0))
+        rows.append(
+            {
+                "date": "" if pd.isna(dt) else dt.strftime("%Y-%m-%d"),
+                "flow": "Income" if row.get("category", "") in INCOME_CATEGORIES else "Expense",
+                "category": row.get("category", ""),
+                "line_item": strip_purchase_prefix(str(row.get("description") or row.get("reference") or "")),
+                "amount": currency(amount_value),
+                "_sort_date": "" if pd.isna(dt) else dt.strftime("%Y-%m-%d"),
+                "_sort_flow": "0" if row.get("category", "") in INCOME_CATEGORIES else "1",
+                "_sort_category": str(row.get("category", "")),
+                "_sort_line_item": strip_purchase_prefix(str(row.get("description") or row.get("reference") or "")),
+                "_sort_amount": amount_value,
+            }
+        )
+    return rows
+
+
 def monthly_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list[dict[str, Any]]:
     if not income.empty:
         income = income.copy()
@@ -761,7 +1227,8 @@ def dashboard_context(
     end_text: str,
     selected_year: int,
     graph_mode: str,
-    line_category: str,
+    chart_style: str,
+    line_category: list[str],
     window_scale: int,
     pie_categories: list[str],
     message: Optional[str],
@@ -772,7 +1239,10 @@ def dashboard_context(
     filtered_expenses = filter_frame(bundle.expenses, start, end)
     all_categories = list(dict.fromkeys(INCOME_CATEGORIES + EXPENSE_CATEGORIES))
     graph_mode_value = graph_mode if graph_mode in {"totals", "category", "pie"} else "totals"
-    line_category_value = line_category if line_category in all_categories else (all_categories[0] if all_categories else "")
+    chart_style_value = chart_style if chart_style in {"line", "bar"} else "line"
+    line_selected = requested_categories(line_category)
+    if not line_selected and all_categories:
+        line_selected = [all_categories[0]]
     window_scale_value = window_scale if 0 <= window_scale < len(WINDOW_OPTIONS) else 2
     window_key = WINDOW_OPTIONS[window_scale_value]
     pie_selected = [category for category in pie_categories if category in all_categories]
@@ -784,34 +1254,53 @@ def dashboard_context(
     recent_transactions = frame_for_view(bundle, filtered_income, filtered_expenses, "All", start, end)
 
     chart_title = "Total Income & Total Expenses"
+    chart_detail_title: Optional[str] = None
+    chart_detail_columns: list[dict[str, str]] = []
+    chart_detail_rows: list[dict[str, Any]] = []
     if graph_mode_value == "totals":
-        chart_svg = build_line_chart_svg(
-            {
-                "Income": aggregate_series(filtered_income, window_key),
-                "Expenses": aggregate_series(filtered_expenses, window_key),
-            },
-            chart_title,
-            window_key,
-        )
+        totals_series = {
+            "Income": aggregate_series(filtered_income, window_key),
+            "Expenses": aggregate_series(filtered_expenses, window_key),
+        }
+        chart_svg = build_bar_chart_svg(totals_series, chart_title, window_key) if chart_style_value == "bar" else build_line_chart_svg(totals_series, chart_title, window_key)
+        chart_detail_title = "Data Points"
+        chart_detail_columns = [
+            {"key": "period", "label": "Period", "sort_key": "_sort_period", "numeric": ""},
+            {"key": "income", "label": "Income", "sort_key": "_sort_income", "numeric": "1"},
+            {"key": "expenses", "label": "Expenses", "sort_key": "_sort_expenses", "numeric": "1"},
+            {"key": "net", "label": "Net", "sort_key": "_sort_net", "numeric": "1"},
+        ]
+        chart_detail_rows = chart_totals_detail_rows(filtered_income, filtered_expenses, window_key)
     elif graph_mode_value == "category":
-        income_category_frame = apply_focus(filtered_income, line_category_value if line_category_value in INCOME_CATEGORIES else "all")
-        expense_category_frame = apply_focus(filtered_expenses, line_category_value if line_category_value in EXPENSE_CATEGORIES else "all")
-        chart_title = f"Income & Expenses for {line_category_value}"
-        chart_svg = build_line_chart_svg(
-            {
-                "Income": aggregate_series(income_category_frame, window_key),
-                "Expenses": aggregate_series(expense_category_frame, window_key),
-            },
-            chart_title,
-            window_key,
-        )
+        chart_title = "Income & Expenses by Category"
+        income_series_map: dict[str, pd.Series] = {}
+        expense_series_map: dict[str, pd.Series] = {}
+        for category in line_selected:
+            if category in INCOME_CATEGORIES:
+                income_series_map[f"Income · {category}"] = aggregate_series(apply_focus(filtered_income, category), window_key)
+            if category in EXPENSE_CATEGORIES:
+                expense_series_map[f"Expenses · {category}"] = aggregate_series(apply_focus(filtered_expenses, category), window_key)
+        if chart_style_value == "bar":
+            chart_svg = build_time_stacked_category_bar_svg(income_series_map, expense_series_map, chart_title, window_key)
+        else:
+            category_series = {**income_series_map, **expense_series_map}
+            chart_svg = build_line_chart_svg(category_series, chart_title, window_key)
+        chart_detail_title = "Line Items"
+        chart_detail_columns = [
+            {"key": "date", "label": "Date", "sort_key": "_sort_date", "numeric": ""},
+            {"key": "flow", "label": "Flow", "sort_key": "_sort_flow", "numeric": ""},
+            {"key": "category", "label": "Category", "sort_key": "_sort_category", "numeric": ""},
+            {"key": "line_item", "label": "Line Item", "sort_key": "_sort_line_item", "numeric": ""},
+            {"key": "amount", "label": "Amount", "sort_key": "_sort_amount", "numeric": "1"},
+        ]
+        chart_detail_rows = chart_category_detail_rows(filtered_income, filtered_expenses, line_selected)
     else:
         chart_title = "Pie Breakdown"
         pie_income = summarize_categories(filtered_income[filtered_income["category"].isin(pie_selected)], INCOME_CATEGORIES, [])
         pie_expense = summarize_categories(filtered_expenses[filtered_expenses["category"].isin(pie_selected)], EXPENSE_CATEGORIES, [])
         chart_svg = build_pie_svg(pie_income, pie_expense)
 
-    export_query = urlencode(dashboard_base_params(period, start_text, end_text, selected_year, graph_mode_value, line_category_value, window_scale_value, pie_selected))
+    export_query = urlencode(dashboard_base_params(period, start_text, end_text, selected_year, graph_mode_value, chart_style_value, line_selected, window_scale_value, pie_selected))
 
     return {
         **base_template_context(request),
@@ -837,17 +1326,22 @@ def dashboard_context(
         "recent_transactions": transaction_rows(recent_transactions, include_contact=True)[:24],
         "export_query": export_query,
         "graph_mode": graph_mode_value,
+        "chart_style": chart_style_value,
         "graph_mode_links": {
-            mode: dashboard_url(period, start_text, end_text, selected_year, mode, line_category_value, window_scale_value, pie_selected)
+            mode: dashboard_url(period, start_text, end_text, selected_year, mode, chart_style_value, line_selected, window_scale_value, pie_selected)
             for mode in ["totals", "category", "pie"]
         },
-        "line_category": line_category_value,
+        "line_categories_selected": set(line_selected),
         "all_categories": all_categories,
         "pie_categories_selected": set(pie_selected),
         "window_scale": window_scale_value,
         "window_key": window_key,
         "window_label": WINDOW_OPTIONS[window_scale_value].title(),
         "chart_title": chart_title,
+        "show_chart_detail_table": graph_mode_value != "pie",
+        "chart_detail_title": chart_detail_title,
+        "chart_detail_columns": chart_detail_columns,
+        "chart_detail_rows": chart_detail_rows,
         "chart_svg": chart_svg,
         "chart_tooltip_script": svg_tooltip_script(),
     }
@@ -958,7 +1452,8 @@ def dashboard(
     end: str = Query(""),
     selected_year: int = Query(date.today().year),
     graph_mode: str = Query("totals"),
-    line_category: str = Query(""),
+    chart_style: str = Query("line"),
+    line_category: list[str] = Query(default=[]),
     window_scale: int = Query(2),
     pie_categories: list[str] = Query(default=[]),
     message: Optional[str] = Query(None),
@@ -973,6 +1468,7 @@ def dashboard(
         end,
         selected_year,
         graph_mode,
+        chart_style,
         line_category,
         window_scale,
         pie_categories,
@@ -1132,7 +1628,8 @@ def export_transactions(
     end: str = Query(""),
     selected_year: int = Query(date.today().year),
     graph_mode: str = Query("totals"),
-    line_category: str = Query(""),
+    chart_style: str = Query("line"),
+    line_category: list[str] = Query(default=[]),
     window_scale: int = Query(2),
     pie_categories: list[str] = Query(default=[]),
 ) -> StreamingResponse:
@@ -1144,8 +1641,9 @@ def export_transactions(
     filtered_income = filter_frame(bundle.income, start_date, end_date)
     filtered_expenses = filter_frame(bundle.expenses, start_date, end_date)
     if graph_mode == "category" and line_category:
-        income_frame = apply_focus(filtered_income, line_category if line_category in INCOME_CATEGORIES else "all")
-        expense_frame = apply_focus(filtered_expenses, line_category if line_category in EXPENSE_CATEGORIES else "all")
+        allowed = requested_categories(line_category)
+        income_frame = filtered_income[filtered_income["category"].isin([category for category in allowed if category in INCOME_CATEGORIES])]
+        expense_frame = filtered_expenses[filtered_expenses["category"].isin([category for category in allowed if category in EXPENSE_CATEGORIES])]
     elif graph_mode == "pie" and pie_categories:
         allowed = requested_categories(pie_categories)
         income_frame = filtered_income[filtered_income["category"].isin(allowed)]

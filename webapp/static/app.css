@@ -527,9 +527,79 @@ button {
   background: color-mix(in srgb, var(--panel-soft) 70%, var(--panel) 30%);
   border: 1px solid var(--line);
   padding: 6px 8px 8px;
-  min-height: 560px;
+  min-height: 420px;
   display: flex;
   align-items: stretch;
+}
+
+.chart-frame.has-detail {
+  padding: 10px;
+}
+
+.chart-layout {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.chart-visual {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.chart-detail-panel {
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-detail-head {
+  padding-bottom: 2px;
+}
+
+.chart-detail-wrap {
+  max-height: 438px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 84%, var(--panel-soft) 16%);
+}
+
+.chart-detail-table {
+  font-size: 0.86rem;
+}
+
+.chart-detail-table tbody tr:hover {
+  background: color-mix(in srgb, var(--brand-soft) 52%, transparent 48%);
+}
+
+.sort-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sort-button.amount {
+  text-align: right;
+}
+
+.sort-button[data-direction="asc"]::after {
+  content: " ↑";
+}
+
+.sort-button[data-direction="desc"]::after {
+  content: " ↓";
 }
 
 .chart-svg {
@@ -542,11 +612,27 @@ button {
   min-height: 540px;
 }
 
+.line-svg {
+  min-height: 360px;
+}
+
 .chart-title { fill: var(--text); font-size: 18px; font-weight: 600; }
 .axis-line { stroke: color-mix(in srgb, var(--line) 78%, white 22%); stroke-width: 1.2; }
 .grid-line { stroke: color-mix(in srgb, var(--line) 56%, white 44%); stroke-width: 1; }
 .axis-label,
 .legend-label { fill: var(--muted); font-size: 11px; }
+.year-inset {
+  fill: color-mix(in srgb, var(--panel-soft) 76%, var(--panel) 24%);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.year-inset-label {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
 
 .chart-empty {
   min-height: 320px;
@@ -777,6 +863,7 @@ td.amount { text-align: right; white-space: nowrap; }
   .lower-grid,
   .source-grid.files-grid,
   .chart-controls,
+  .chart-layout,
   .rules-grid {
     grid-template-columns: 1fr;
   }
@@ -809,6 +896,13 @@ td.amount { text-align: right; white-space: nowrap; }
   .chart-title-inline {
     justify-self: start;
     text-align: left;
+  }
+
+  .chart-detail-panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-left: 0;
+    padding-top: 12px;
   }
 
   .pie-filter-grid {
