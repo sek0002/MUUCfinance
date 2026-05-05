@@ -1106,17 +1106,20 @@ def category_subgroup_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list
     combined = pd.concat([income, expenses], ignore_index=True, sort=False)
     if combined.empty:
         return []
+    combined = combined.copy()
+    combined["flow"] = combined.get("category", "").map(lambda value: "Income" if value in INCOME_CATEGORIES else "Expense")
     summary = (
         combined.assign(subgroup=combined.get("subgroup", "").fillna("").replace("", "Unmatched"))
-        .groupby(["category", "subgroup"], dropna=False)
+        .groupby(["flow", "category", "subgroup"], dropna=False)
         .agg(transaction_count=("amount", "size"), total_amount=("amount", "sum"))
         .reset_index()
-        .sort_values(["category", "total_amount"], ascending=[True, False])
+        .sort_values(["flow", "category", "total_amount"], ascending=[True, True, False])
     )
     rows: list[dict[str, Any]] = []
     for _, row in summary.iterrows():
         rows.append(
             {
+                "flow": str(row["flow"]),
                 "category": str(row["category"]),
                 "subgroup": str(row["subgroup"]),
                 "transaction_count": int(row["transaction_count"]),
