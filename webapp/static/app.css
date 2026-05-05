@@ -1139,19 +1139,23 @@ td.amount { text-align: right; white-space: nowrap; }
 
   .topbar-actions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
-  .menu-dropdown,
+  .menu-dropdown {
+    width: auto;
+    margin-left: auto;
+  }
+
   .menu-trigger {
-    width: 100%;
+    width: auto;
   }
 
   .menu-panel {
     min-width: 0;
     width: min(280px, calc(100vw - 24px));
-    left: 0;
-    right: auto;
+    left: auto;
+    right: 0;
   }
 
   .source-pill-row {
