@@ -384,12 +384,13 @@
 
   <section class="panel">
     <div class="panel-head tight">
-      <h2>Category Assignment Summary</h2>
+      <h2>Category Assignment Summary (Income)</h2>
     </div>
     <div class="table-wrap compact-table-wrap">
       <table>
         <thead>
           <tr>
+            <th>Line</th>
             <th>Category</th>
             <th>Subgroup</th>
             <th>Transactions</th>
@@ -397,8 +398,39 @@
           </tr>
         </thead>
         <tbody>
-          {% for row in category_subgroup_rows %}
+          {% for row in income_category_subgroup_rows %}
           <tr>
+            <td>{{ row.flow }}</td>
+            <td>{{ row.category }}</td>
+            <td>{{ row.subgroup }}</td>
+            <td>{{ row.transaction_count }}</td>
+            <td class="amount">{{ row.total_amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head tight">
+      <h2>Category Assignment Summary (Expenses)</h2>
+    </div>
+    <div class="table-wrap compact-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Line</th>
+            <th>Category</th>
+            <th>Subgroup</th>
+            <th>Transactions</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in expense_category_subgroup_rows %}
+          <tr>
+            <td>{{ row.flow }}</td>
             <td>{{ row.category }}</td>
             <td>{{ row.subgroup }}</td>
             <td>{{ row.transaction_count }}</td>
