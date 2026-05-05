@@ -390,6 +390,7 @@
       <table>
         <thead>
           <tr>
+            <th>Line</th>
             <th>Category</th>
             <th>Subgroup</th>
             <th>Transactions</th>
@@ -399,6 +400,7 @@
         <tbody>
           {% for row in category_subgroup_rows %}
           <tr>
+            <td>{{ row.flow }}</td>
             <td>{{ row.category }}</td>
             <td>{{ row.subgroup }}</td>
             <td>{{ row.transaction_count }}</td>
