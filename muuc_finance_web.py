@@ -1106,17 +1106,20 @@ def category_subgroup_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list
     combined = pd.concat([income, expenses], ignore_index=True, sort=False)
     if combined.empty:
         return []
+    combined = combined.copy()
+    combined["flow"] = combined.get("category", "").map(lambda value: "Income" if value in INCOME_CATEGORIES else "Expense")
     summary = (
         combined.assign(subgroup=combined.get("subgroup", "").fillna("").replace("", "Unmatched"))
-        .groupby(["category", "subgroup"], dropna=False)
+        .groupby(["flow", "category", "subgroup"], dropna=False)
         .agg(transaction_count=("amount", "size"), total_amount=("amount", "sum"))
         .reset_index()
-        .sort_values(["category", "total_amount"], ascending=[True, False])
+        .sort_values(["flow", "category", "total_amount"], ascending=[True, True, False])
     )
     rows: list[dict[str, Any]] = []
     for _, row in summary.iterrows():
         rows.append(
             {
+                "flow": str(row["flow"]),
                 "category": str(row["category"]),
                 "subgroup": str(row["subgroup"]),
                 "transaction_count": int(row["transaction_count"]),
@@ -1361,6 +1364,9 @@ def dashboard_context(
         chart_svg = build_pie_svg(pie_income, pie_expense)
 
     export_query = urlencode(dashboard_base_params(period, start_text, end_text, selected_year, graph_mode_value, chart_style_value, line_selected, window_scale_value, pie_selected))
+    category_summary_rows = category_subgroup_rows(filtered_income, filtered_expenses)
+    income_category_summary_rows = [row for row in category_summary_rows if row.get("flow") == "Income"]
+    expense_category_summary_rows = [row for row in category_summary_rows if row.get("flow") == "Expense"]
 
     return {
         **base_template_context(request),
@@ -1382,7 +1388,9 @@ def dashboard_context(
         "misc_count": len(filter_frame(bundle.misc_income, start, end)) + len(filter_frame(bundle.misc_expenses, start, end)),
         "income_rows": category_rows(income_summary),
         "expense_rows": category_rows(expense_summary),
-        "category_subgroup_rows": category_subgroup_rows(filtered_income, filtered_expenses),
+        "category_subgroup_rows": category_summary_rows,
+        "income_category_subgroup_rows": income_category_summary_rows,
+        "expense_category_subgroup_rows": expense_category_summary_rows,
         "recent_transactions": transaction_rows(recent_transactions, include_contact=True)[:24],
         "export_query": export_query,
         "graph_mode": graph_mode_value,

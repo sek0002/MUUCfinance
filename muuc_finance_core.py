@@ -274,7 +274,7 @@ def parse_teamapp_income(teamapp_path: Path, rule_df: pd.DataFrame) -> pd.DataFr
     return df[["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]]
 
 
-def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
+def _load_everyday_frame(everyday_path: Path) -> pd.DataFrame:
     raw = pd.read_csv(everyday_path)
     df = raw.copy()
     df["date"] = pd.to_datetime(df["Date"], format="%d %b %y", errors="coerce")
@@ -286,11 +286,47 @@ def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Da
         normalized_dates = df.loc[missing_dates, "Date"].astype(str).str.replace("Sept", "Sep", regex=False)
         df.loc[missing_dates, "date"] = pd.to_datetime(normalized_dates, format="%d %b %y", errors="coerce")
     df["raw_amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
-    df = df[df["raw_amount"] < 0].copy()
-    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
-    df["amount"] = df["raw_amount"].abs()
     detail_text = df["Transaction Details"].fillna("") + " " + df["Merchant Name"].fillna("")
     df["description"] = detail_text.str.strip()
+    return df
+
+
+def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
+    df = _load_everyday_frame(everyday_path)
+    linked_mask = df["description"].str.contains("linked acc trns", case=False, na=False)
+    df = df[~linked_mask].copy()
+    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
+    if "Transaction Type" in df.columns:
+        tx_type = df["Transaction Type"].fillna("").astype(str).str.strip().str.lower()
+        df = df[tx_type != "inter-bank credit"].copy()
+    df = df[df["raw_amount"] > 0].copy()
+    if df.empty:
+        return pd.DataFrame(
+            columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
+        )
+    df["amount"] = df["raw_amount"]
+    compiled = compile_rule_map(rule_df, INCOME_CATEGORIES)
+    categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, INCOME_CATEGORIES)))
+    df["category"] = list(categories)
+    df["matched"] = list(matched)
+    df["subgroup"] = list(subgroups)
+    df["source"] = "everyday income"
+    df["reference"] = ""
+    df["refunded_amount"] = 0.0
+    df["name"] = ""
+    df["email"] = ""
+    return df[["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]]
+
+
+def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
+    df = _load_everyday_frame(everyday_path)
+    linked_mask = df["description"].str.contains("linked acc trns", case=False, na=False)
+    df = df[~linked_mask].copy()
+    df = df[df["raw_amount"] < 0].copy()
+    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
+    if df.empty:
+        return pd.DataFrame(columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"])
+    df["amount"] = df["raw_amount"]
     compiled = compile_rule_map(rule_df, EXPENSE_CATEGORIES)
     categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, EXPENSE_CATEGORIES)))
     df["category"] = list(categories)
@@ -314,7 +350,9 @@ def load_analysis(
     expense_rules = load_rule_table(expense_rules_path, EXPENSE_CATEGORIES)
     _, stripe_expenses = parse_stripe_income(stripe_path)
     income = parse_teamapp_income(teamapp_path, income_rules)
+    everyday_income = parse_everyday_income(everyday_path, income_rules)
     everyday_expenses = parse_everyday_expenses(everyday_path, expense_rules)
+    income = pd.concat([income, everyday_income], ignore_index=True, sort=False)
     expenses = pd.concat([everyday_expenses, stripe_expenses], ignore_index=True, sort=False)
     misc_income = income[income["category"] == "misc"].copy()
     misc_expenses = expenses[expenses["category"] == "misc"].copy()
