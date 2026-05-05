@@ -293,13 +293,8 @@ def _load_everyday_frame(everyday_path: Path) -> pd.DataFrame:
 
 def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
     df = _load_everyday_frame(everyday_path)
-    linked_mask = df["description"].str.contains("linked acc trns", case=False, na=False)
-    df = df[~linked_mask].copy()
     df = df[df["raw_amount"] > 0].copy()
-    if "Transaction Type" in df.columns:
-        type_values = df["Transaction Type"].fillna("").astype(str).str.strip().str.lower()
-        transfer_credit_mask = df["description"].str.contains("transfer", case=False, na=False)
-        df = df[(type_values == "credit") | transfer_credit_mask].copy()
+    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     if df.empty:
         return pd.DataFrame(
             columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
@@ -320,12 +315,6 @@ def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Data
 
 def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
     df = _load_everyday_frame(everyday_path)
-    linked_mask = df["description"].str.contains("linked acc trns", case=False, na=False)
-    df = df[~linked_mask].copy()
-    if "Transaction Type" in df.columns:
-        type_values = df["Transaction Type"].fillna("").astype(str).str.strip().str.lower()
-        auto_drawing_mask = df["description"].str.contains("automatic drawing", case=False, na=False)
-        df = df[(type_values == "debit") | auto_drawing_mask].copy()
     df = df[df["raw_amount"] < 0].copy()
     df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     df["amount"] = df["raw_amount"].abs()
