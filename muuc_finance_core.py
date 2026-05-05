@@ -300,6 +300,8 @@ def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Data
     df = df[~linked_mask].copy()
     df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     df = df[df["raw_amount"] > 0].copy()
+    df = df[df["raw_amount"] > 0].copy()
+    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     if df.empty:
         return pd.DataFrame(
             columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
@@ -327,6 +329,7 @@ def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Da
     if df.empty:
         return pd.DataFrame(columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"])
     df["amount"] = df["raw_amount"]
+    df["amount"] = df["raw_amount"].abs()
     compiled = compile_rule_map(rule_df, EXPENSE_CATEGORIES)
     categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, EXPENSE_CATEGORIES)))
     df["category"] = list(categories)
