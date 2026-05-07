@@ -1103,11 +1103,15 @@ def transaction_rows(frame: pd.DataFrame, include_contact: bool) -> list[dict[st
 
 
 def category_subgroup_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list[dict[str, Any]]:
-    combined = pd.concat([income, expenses], ignore_index=True, sort=False)
+    income_frame = income.copy()
+    expense_frame = expenses.copy()
+    if not income_frame.empty:
+        income_frame["flow"] = "Income"
+    if not expense_frame.empty:
+        expense_frame["flow"] = "Expense"
+    combined = pd.concat([income_frame, expense_frame], ignore_index=True, sort=False)
     if combined.empty:
         return []
-    combined = combined.copy()
-    combined["flow"] = combined.get("category", "").map(lambda value: "Income" if value in INCOME_CATEGORIES else "Expense")
     summary = (
         combined.assign(subgroup=combined.get("subgroup", "").fillna("").replace("", "Unmatched"))
         .groupby(["flow", "category", "subgroup"], dropna=False)
@@ -1159,6 +1163,10 @@ def chart_category_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, sel
     expense_allowed = [category for category in allowed if category in EXPENSE_CATEGORIES]
     income_frame = income[income["category"].isin(income_allowed)].copy() if income_allowed else pd.DataFrame(columns=income.columns)
     expense_frame = expenses[expenses["category"].isin(expense_allowed)].copy() if expense_allowed else pd.DataFrame(columns=expenses.columns)
+    if not income_frame.empty:
+        income_frame["flow"] = "Income"
+    if not expense_frame.empty:
+        expense_frame["flow"] = "Expense"
     rows: list[dict[str, Any]] = []
     combined = pd.concat([income_frame, expense_frame], ignore_index=True, sort=False)
     if combined.empty:
@@ -1170,12 +1178,12 @@ def chart_category_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, sel
         rows.append(
             {
                 "date": "" if pd.isna(dt) else dt.strftime("%Y-%m-%d"),
-                "flow": "Income" if row.get("category", "") in INCOME_CATEGORIES else "Expense",
+                "flow": row.get("flow", "Expense"),
                 "category": row.get("category", ""),
                 "line_item": strip_purchase_prefix(str(row.get("description") or row.get("reference") or "")),
                 "amount": currency(amount_value),
                 "_sort_date": "" if pd.isna(dt) else dt.strftime("%Y-%m-%d"),
-                "_sort_flow": "0" if row.get("category", "") in INCOME_CATEGORIES else "1",
+                "_sort_flow": "0" if row.get("flow", "Expense") == "Income" else "1",
                 "_sort_category": str(row.get("category", "")),
                 "_sort_line_item": strip_purchase_prefix(str(row.get("description") or row.get("reference") or "")),
                 "_sort_amount": amount_value,
