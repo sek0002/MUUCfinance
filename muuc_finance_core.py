@@ -302,7 +302,6 @@ def _load_everyday_frame(everyday_path: Path) -> pd.DataFrame:
 
 def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
     df = _load_everyday_frame(everyday_path)
-    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     df = df[df["raw_amount"] > 0].copy()
     if df.empty:
         return pd.DataFrame(
@@ -324,7 +323,6 @@ def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Data
 
 def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
     df = _load_everyday_frame(everyday_path)
-    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     df = df[df["raw_amount"] < 0].copy()
     if df.empty:
         return pd.DataFrame(columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"])
