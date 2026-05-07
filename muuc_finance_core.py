@@ -286,22 +286,22 @@ def _load_everyday_frame(everyday_path: Path) -> pd.DataFrame:
         normalized_dates = df.loc[missing_dates, "Date"].astype(str).str.replace("Sept", "Sep", regex=False)
         df.loc[missing_dates, "date"] = pd.to_datetime(normalized_dates, format="%d %b %y", errors="coerce")
     df["raw_amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
-    if "Transaction Type" in df.columns:
-        tx_type = df["Transaction Type"].fillna("").astype(str).str.strip().str.lower()
-        df = df[tx_type != "inter-bank credit"].copy()
-    detail_text = df["Transaction Details"].fillna("") + " " + df["Merchant Name"].fillna("")
+    tx_type = df.get("Transaction Type", pd.Series("", index=df.index)).fillna("").astype(str)
+    detail_text = df.get("Transaction Details", pd.Series("", index=df.index)).fillna("").astype(str)
+    merchant_text = df.get("Merchant Name", pd.Series("", index=df.index)).fillna("").astype(str)
+    # Exclude bank-internal movements before sign-based income/expense handling.
+    interbank_mask = tx_type.str.contains("inter-bank", case=False, na=False)
+    linked_account_mask = detail_text.str.contains("linked acc trns muuc", case=False, na=False)
+    df = df[~(interbank_mask | linked_account_mask)].copy()
+    detail_text = detail_text.loc[df.index] + " " + merchant_text.loc[df.index]
     df["description"] = detail_text.str.strip()
     return df
 
 
 def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
     df = _load_everyday_frame(everyday_path)
-    linked_mask = df["description"].str.contains("linked acc trns", case=False, na=False)
-    df = df[~linked_mask].copy()
     df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     df = df[df["raw_amount"] > 0].copy()
-    df = df[df["raw_amount"] > 0].copy()
-    df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
     if df.empty:
         return pd.DataFrame(
             columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "refunded_amount", "name", "email"]
@@ -322,14 +322,11 @@ def parse_everyday_income(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Data
 
 def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.DataFrame:
     df = _load_everyday_frame(everyday_path)
-    linked_mask = df["description"].str.contains("linked acc trns", case=False, na=False)
-    df = df[~linked_mask].copy()
-    df = df[df["raw_amount"] < 0].copy()
     df = df[df["Category"].fillna("").str.strip().str.lower() != "internal transfers"].copy()
+    df = df[df["raw_amount"] < 0].copy()
     if df.empty:
         return pd.DataFrame(columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"])
     df["amount"] = df["raw_amount"]
-    df["amount"] = df["raw_amount"].abs()
     compiled = compile_rule_map(rule_df, EXPENSE_CATEGORIES)
     categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, EXPENSE_CATEGORIES)))
     df["category"] = list(categories)
