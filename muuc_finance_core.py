@@ -224,7 +224,7 @@ def parse_stripe_income(stripe_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     fee_expenses["subgroup"] = "Fee column"
     fee_expenses["source"] = "stripe fee"
     fee_expenses.rename(columns={"fee_amount": "amount", "id": "reference"}, inplace=True)
-    fee_expenses["amount"] = -fee_expenses["amount"].abs()
+    fee_expenses["amount"] = fee_expenses["amount"].abs()
     refund_expenses = df[refund_mask][["date", "description", "refunded_amount", "id"]].copy()
     refund_expenses = refund_expenses[refund_expenses["refunded_amount"] > 0].copy()
     refund_expenses["category"] = "refunds"
@@ -232,7 +232,7 @@ def parse_stripe_income(stripe_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     refund_expenses["subgroup"] = "Refund status"
     refund_expenses["source"] = "stripe refund"
     refund_expenses.rename(columns={"refunded_amount": "amount", "id": "reference"}, inplace=True)
-    refund_expenses["amount"] = -refund_expenses["amount"].abs()
+    refund_expenses["amount"] = refund_expenses["amount"].abs()
     expenses = pd.concat([fee_expenses, refund_expenses], ignore_index=True, sort=False)
     expenses["name"] = ""
     expenses["email"] = ""
@@ -328,7 +328,7 @@ def parse_everyday_expenses(everyday_path: Path, rule_df: pd.DataFrame) -> pd.Da
     df = df[df["raw_amount"] < 0].copy()
     if df.empty:
         return pd.DataFrame(columns=["date", "description", "category", "matched", "subgroup", "amount", "source", "reference", "name", "email"])
-    df["amount"] = df["raw_amount"]
+    df["amount"] = df["raw_amount"].abs()
     compiled = compile_rule_map(rule_df, EXPENSE_CATEGORIES)
     categories, matched, subgroups = zip(*df["description"].map(lambda value: match_category(value, compiled, EXPENSE_CATEGORIES)))
     df["category"] = list(categories)
