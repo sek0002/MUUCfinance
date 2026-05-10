@@ -59,7 +59,7 @@ def load_dotenv(path: Path = BASE_DIR / ".env") -> None:
         key = key.strip()
         value = value.strip().strip("\"'")
         value = os.path.expanduser(os.path.expandvars(value))
-        if key and key not in os.environ:
+        if key:
             os.environ[key] = value
 
 

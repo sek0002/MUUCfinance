@@ -56,20 +56,13 @@ The repo also includes a FastAPI-hosted version with administrator authenticator
 python3 muuc_finance_web.py --init-auth
 ```
 
-2. Copy `.env.example` to `.env`, then set the required secrets:
+2. Copy `.env.example` to `.env`, then set the required secrets in `.env`:
 
 ```bash
 cp .env.example .env
-export MUUC_WEB_USERNAME="sek0002"
-export MUUC_TOTP_SECRET="paste-secret-from-init-auth"
-export MUUC_SESSION_SECRET="choose-a-long-random-session-secret"
-export MUUC_DEMO_PIN="choose-a-4-digit-pin"
-export MUUC_WEB_DATA_DIR="$HOME/.muuc_finance_analyzer/web"
-export MUUC_LOGIN_RATE_LIMIT_MAX_ATTEMPTS="5"
-export MUUC_LOGIN_RATE_LIMIT_WINDOW_SECONDS="300"
 ```
 
-Values in `.env` are loaded automatically when starting `muuc_finance_web.py`, and shell environment variables override them.
+Values in `.env` are loaded automatically when starting `muuc_finance_web.py`, and the app uses them even if similarly named shell environment variables already exist.
 
 3. Start the server:
 
