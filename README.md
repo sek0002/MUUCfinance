@@ -48,7 +48,7 @@ python3 muuc_finance_app.py --summary
 
 ## Run the hosted web app
 
-The repo also includes a FastAPI-hosted version with username/password plus authenticator-app login.
+The repo also includes a FastAPI-hosted version with administrator authenticator-app login and sandbox PIN access.
 
 1. Generate a TOTP secret and provisioning URI:
 
@@ -56,15 +56,20 @@ The repo also includes a FastAPI-hosted version with username/password plus auth
 python3 muuc_finance_web.py --init-auth
 ```
 
-2. Set the required environment variables:
+2. Copy `.env.example` to `.env`, then set the required secrets:
 
 ```bash
+cp .env.example .env
 export MUUC_WEB_USERNAME="sek0002"
-export MUUC_WEB_PASSWORD="choose-a-strong-password"
 export MUUC_TOTP_SECRET="paste-secret-from-init-auth"
 export MUUC_SESSION_SECRET="choose-a-long-random-session-secret"
+export MUUC_DEMO_PIN="choose-a-4-digit-pin"
 export MUUC_WEB_DATA_DIR="$HOME/.muuc_finance_analyzer/web"
+export MUUC_LOGIN_RATE_LIMIT_MAX_ATTEMPTS="5"
+export MUUC_LOGIN_RATE_LIMIT_WINDOW_SECONDS="300"
 ```
+
+Values in `.env` are loaded automatically when starting `muuc_finance_web.py`, and shell environment variables override them.
 
 3. Start the server:
 
@@ -80,7 +85,8 @@ python3 muuc_finance_web.py --host 127.0.0.1 --port 8000 --reload
 
 The hosted app lets you:
 
-- sign in with password plus 6-digit TOTP code from an authenticator app
+- sign in as an administrator with a 6-digit TOTP code from an authenticator app
+- sign in to a disposable sandbox with `MUUC_DEMO_PIN`
 - upload replacement `stripe.csv`, `teamapp.csv`, and `everyday.csv`
 - download the current source CSVs
 - apply the same date and category filters

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import html
 import io
 import os
 import re
 import shutil
+import time
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
@@ -44,6 +46,33 @@ BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "webapp"
 TEMPLATES_DIR = WEB_DIR / "templates"
 STATIC_DIR = WEB_DIR / "static"
+
+
+def load_dotenv(path: Path = BASE_DIR / ".env") -> None:
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        value = os.path.expanduser(os.path.expandvars(value))
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_dotenv()
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
 SOURCE_KEYS = ("stripe", "teamapp", "everyday")
 RULE_FILE_MAP = {
     "income": ("income_rules.csv", INCOME_CATEGORIES),
@@ -66,7 +95,10 @@ PERIOD_OPTIONS = [
     "Current Financial Year",
 ]
 PURCHASE_PREFIX_RE = re.compile(r"^MUUC\s+(?:Ticketing\s+)?Purchase\s+Id:\s*\d+\s*-\s*", flags=re.IGNORECASE)
-DEMO_PIN = "6882"
+DEMO_PIN = os.getenv("MUUC_DEMO_PIN", "")
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS = env_int("MUUC_LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 5)
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = env_int("MUUC_LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300)
+LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 DEFAULT_DASHBOARD_END = date.today()
 DEFAULT_DASHBOARD_START = DEFAULT_DASHBOARD_END - timedelta(days=365)
 
@@ -126,6 +158,32 @@ def verify_totp(code: str) -> bool:
         return pyotp.TOTP(secret).verify(code.strip(), valid_window=1)
     except Exception:
         return False
+
+
+def client_login_key(request: Request, login_type: str) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    host = forwarded_for.split(",", 1)[0].strip()
+    if not host and request.client:
+        host = request.client.host
+    return f"{login_type}:{host or 'unknown'}"
+
+
+def login_attempts_exceeded(request: Request, login_type: str) -> bool:
+    key = client_login_key(request, login_type)
+    now = time.monotonic()
+    window_start = now - LOGIN_RATE_LIMIT_WINDOW_SECONDS
+    attempts = [attempt for attempt in LOGIN_ATTEMPTS.get(key, []) if attempt >= window_start]
+    LOGIN_ATTEMPTS[key] = attempts
+    return len(attempts) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+
+
+def register_login_failure(request: Request, login_type: str) -> None:
+    key = client_login_key(request, login_type)
+    LOGIN_ATTEMPTS.setdefault(key, []).append(time.monotonic())
+
+
+def clear_login_failures(request: Request, login_type: str) -> None:
+    LOGIN_ATTEMPTS.pop(client_login_key(request, login_type), None)
 
 
 def ensure_web_source_dir() -> Path:
@@ -1468,13 +1526,17 @@ def service_worker() -> FileResponse:
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, message: Optional[str] = None) -> HTMLResponse:
+    message_text = {
+        "config": "Login is not configured.",
+        "rate": "Too many login attempts. Please wait and try again.",
+    }.get(message, "Invalid login code." if message else None)
     return templates.TemplateResponse(
         "login.html",
         {
             **base_template_context(request),
             "login_error": bool(message),
             "login_page": True,
-            "message": "Invalid login code." if message else None,
+            "message": message_text,
         },
     )
 
@@ -1486,11 +1548,16 @@ async def admin_login(
 ) -> RedirectResponse:
     config_error = auth_config_error()
     if config_error:
-        return RedirectResponse(url=f"/login?message={config_error}", status_code=303)
+        return RedirectResponse(url="/login?message=config", status_code=303)
+
+    if login_attempts_exceeded(request, "admin"):
+        return RedirectResponse(url="/login?message=rate", status_code=303)
 
     if not verify_totp(totp_code):
+        register_login_failure(request, "admin")
         return RedirectResponse(url="/login?message=1", status_code=303)
 
+    clear_login_failures(request, "admin")
     request.session["authenticated"] = True
     request.session["username"] = auth_config()["username"]
     request.session["session_mode"] = "admin"
@@ -1503,9 +1570,17 @@ async def pin_login(
     request: Request,
     pin_code: str = Form(...),
 ) -> RedirectResponse:
-    if pin_code.strip() != DEMO_PIN:
+    if not DEMO_PIN:
+        return RedirectResponse(url="/login?message=config", status_code=303)
+
+    if login_attempts_exceeded(request, "pin"):
+        return RedirectResponse(url="/login?message=rate", status_code=303)
+
+    if not hmac.compare_digest(pin_code.strip(), DEMO_PIN):
+        register_login_failure(request, "pin")
         return RedirectResponse(url="/login?message=1", status_code=303)
 
+    clear_login_failures(request, "pin")
     request.session["authenticated"] = True
     request.session["username"] = "demo"
     request.session["session_mode"] = "demo"
