@@ -1,18 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="login-report-strip">
-  <span>Treasury Report for 2025</span>
-  <a class="login-report-link" href="/treasury-report">Open Report</a>
-</div>
+<a class="login-report-strip" href="/treasury-report">Treasury Report for 2025</a>
 
 <section class="login-shell">
   <article class="login-panel">
-    <div class="eyebrow">Administrator</div>
-    <h2>Admin Login</h2>
-    <p class="muted">Uses the persistent finance data and saved rule tables.</p>
-    <form method="post" action="/login/admin" class="login-minimal-form stacked-login-form">
+    <div class="eyebrow">Access</div>
+    <h2>Login</h2>
+    <p class="muted" id="login-help">Uses the persistent finance data and saved rule tables.</p>
+    <form method="post" action="/login/admin" class="login-minimal-form stacked-login-form" id="login-form">
+      <select id="login-type" class="login-type-select" aria-label="Select login type">
+        <option value="admin" selected>Administrator</option>
+        <option value="sandbox">Sandbox</option>
+      </select>
       <input
+        id="login-code"
         type="text"
         name="totp_code"
         inputmode="numeric"
@@ -25,29 +27,36 @@
         autofocus
         aria-label="Administrator OTP code"
       >
-      <button type="submit" aria-label="Submit administrator OTP code">Enter</button>
-    </form>
-  </article>
-
-  <article class="login-panel">
-    <div class="eyebrow">Sandbox</div>
-    <h2>PIN Access</h2>
-    <p class="muted">Loads a disposable copy of the app. Uploads and rule edits are not persisted.</p>
-    <form method="post" action="/login/pin" class="login-minimal-form stacked-login-form">
-      <input
-        type="password"
-        name="pin_code"
-        inputmode="numeric"
-        pattern="[0-9]{4}"
-        maxlength="4"
-        autocomplete="one-time-code"
-        placeholder="PIN"
-        class="{% if login_error %}login-error{% endif %}"
-        required
-        aria-label="Sandbox PIN code"
-      >
-      <button type="submit" aria-label="Submit sandbox PIN code">Enter</button>
+      <button type="submit" aria-label="Submit login code">Enter</button>
     </form>
   </article>
 </section>
+
+<script>
+  (function () {
+    const form = document.getElementById("login-form");
+    const type = document.getElementById("login-type");
+    const code = document.getElementById("login-code");
+    const help = document.getElementById("login-help");
+    if (!form || !type || !code || !help) return;
+
+    const sync = function () {
+      const sandbox = type.value === "sandbox";
+      form.action = sandbox ? "/login/pin" : "/login/admin";
+      code.name = sandbox ? "pin_code" : "totp_code";
+      code.type = sandbox ? "password" : "text";
+      code.pattern = sandbox ? "[0-9]{4}" : "[0-9]{6}";
+      code.maxLength = sandbox ? 4 : 6;
+      code.placeholder = sandbox ? "PIN" : "OTP";
+      code.setAttribute("aria-label", sandbox ? "Sandbox PIN code" : "Administrator OTP code");
+      help.textContent = sandbox
+        ? "Loads a disposable copy of the app. Uploads and rule edits are not persisted."
+        : "Uses the persistent finance data and saved rule tables.";
+      code.value = "";
+    };
+
+    type.addEventListener("change", sync);
+    sync();
+  })();
+</script>
 {% endblock %}

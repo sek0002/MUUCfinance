@@ -967,7 +967,8 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-shell {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(340px, 1fr));
+  grid-template-columns: minmax(280px, 440px);
+  justify-content: center;
   gap: 18px;
   align-items: stretch;
 }
@@ -978,18 +979,15 @@ td.amount { text-align: right; white-space: nowrap; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 10px 12px;
+  min-height: 42px;
+  padding: 0 18px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 86%, transparent 14%);
-  box-shadow: var(--shadow);
-}
-
-.login-report-strip span {
   color: var(--text);
   font-size: 0.95rem;
   font-weight: 700;
+  box-shadow: var(--shadow);
 }
 
 .login-panel {
@@ -999,7 +997,7 @@ td.amount { text-align: right; white-space: nowrap; }
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   display: grid;
-  grid-template-rows: auto auto minmax(84px, auto) 1fr;
+  grid-template-rows: auto auto minmax(72px, auto) 1fr;
   gap: 10px;
   min-height: 100%;
 }
@@ -1012,39 +1010,31 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-minimal { width: 100%; }
 .login-minimal-form {
   display: grid;
-  grid-template-columns: 1fr 70px;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel-soft) 82%, var(--panel) 18%);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+}
+
+.login-type-select {
+  min-height: 40px;
+  background: var(--panel);
 }
 
 .login-minimal-form input {
-  padding: 16px 18px;
+  padding: 10px 12px;
   text-align: center;
-  letter-spacing: 0.2em;
-  font-size: 1.2rem;
-  border-radius: 16px;
+  letter-spacing: 0.16em;
+  font-size: 0.98rem;
+  border-radius: 12px;
+  background: var(--panel);
 }
 
 .login-minimal-form input::placeholder {
   font-size: 0.82em;
   letter-spacing: 0.18em;
-}
-
-.login-report-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: var(--brand);
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.9rem;
 }
 
 .login-minimal-form input.login-error {
@@ -1054,9 +1044,9 @@ td.amount { text-align: right; white-space: nowrap; }
 
 .login-minimal-form button {
   padding: 0;
-  min-height: 62px;
-  font-size: 1.5rem;
-  border-radius: 16px;
+  min-height: 42px;
+  font-size: 0.95rem;
+  border-radius: 12px;
 }
 
 .stacked-login-form {
@@ -1067,9 +1057,9 @@ td.amount { text-align: right; white-space: nowrap; }
 }
 
 .stacked-login-form button {
-  min-height: 52px;
-  font-size: 1rem;
-  padding: 0 16px;
+  min-height: 40px;
+  font-size: 0.92rem;
+  padding: 0 14px;
 }
 
 @media (max-width: 1100px) {
