@@ -130,12 +130,12 @@
         {% if graph_mode == 'category' %}
         <div class="pie-filter-menu">
           <label class="toolbar-label">Categories</label>
-          <details class="filter-menu-dropdown">
-            <summary>{{ line_categories_selected | length }} selected</summary>
+          <details class="filter-menu-dropdown" data-deferred-submit-menu>
+            <summary data-selected-count>{{ line_categories_selected | length }} selected</summary>
             <div class="pie-filter-grid">
               {% for category in all_categories %}
               <label class="filter-check{% if category in line_categories_selected %} active{% endif %}">
-                <input type="checkbox" name="line_category" value="{{ category }}" {% if category in line_categories_selected %}checked{% endif %} data-auto-submit="change">
+                <input type="checkbox" name="line_category" value="{{ category }}" {% if category in line_categories_selected %}checked{% endif %} data-deferred-submit="change">
                 <span>{{ category }}</span>
               </label>
               {% endfor %}
@@ -151,12 +151,12 @@
         {% if graph_mode == 'pie' %}
         <div class="pie-filter-menu">
           <label class="toolbar-label">Categories</label>
-          <details class="filter-menu-dropdown">
-            <summary>{{ pie_categories_selected | length }} selected</summary>
+          <details class="filter-menu-dropdown" data-deferred-submit-menu>
+            <summary data-selected-count>{{ pie_categories_selected | length }} selected</summary>
             <div class="pie-filter-grid">
               {% for category in all_categories %}
               <label class="filter-check{% if category in pie_categories_selected %} active{% endif %}">
-                <input type="checkbox" name="pie_categories" value="{{ category }}" {% if category in pie_categories_selected %}checked{% endif %} data-auto-submit="change">
+                <input type="checkbox" name="pie_categories" value="{{ category }}" {% if category in pie_categories_selected %}checked{% endif %} data-deferred-submit="change">
                 <span>{{ category }}</span>
               </label>
               {% endfor %}
@@ -259,6 +259,41 @@
           form.querySelectorAll("[data-auto-submit='change']").forEach(function (node) {
             node.addEventListener("change", function () {
               submitSoon(0);
+            });
+          });
+          const submitDeferredMenu = function (menu) {
+            if (!menu || menu.dataset.dirty !== "true") return;
+            menu.dataset.dirty = "false";
+            submitSoon(0);
+          };
+          const syncDeferredMenuCount = function (menu) {
+            const summary = menu.querySelector("[data-selected-count]");
+            if (!summary) return;
+            const count = menu.querySelectorAll("[data-deferred-submit='change']:checked").length;
+            summary.textContent = count + " selected";
+          };
+          form.querySelectorAll("[data-deferred-submit-menu]").forEach(function (menu) {
+            menu.querySelectorAll("[data-deferred-submit='change']").forEach(function (node) {
+              node.addEventListener("change", function () {
+                const label = node.closest(".filter-check");
+                if (label) {
+                  label.classList.toggle("active", node.checked);
+                }
+                menu.dataset.dirty = "true";
+                syncDeferredMenuCount(menu);
+              });
+            });
+            menu.addEventListener("toggle", function () {
+              if (!menu.open) {
+                submitDeferredMenu(menu);
+              }
+            });
+          });
+          document.addEventListener("click", function (event) {
+            form.querySelectorAll("[data-deferred-submit-menu][open]").forEach(function (menu) {
+              if (!menu.contains(event.target)) {
+                menu.open = false;
+              }
             });
           });
           form.querySelectorAll("[data-auto-submit='input']").forEach(function (node) {
