@@ -967,9 +967,29 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-shell {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  grid-template-columns: repeat(2, minmax(340px, 1fr));
   gap: 18px;
   align-items: stretch;
+}
+
+.login-report-strip {
+  width: min(100%, 760px);
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 86%, transparent 14%);
+  box-shadow: var(--shadow);
+}
+
+.login-report-strip span {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .login-panel {
@@ -1018,13 +1038,13 @@ td.amount { text-align: right; white-space: nowrap; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 56px;
-  padding: 0 18px;
-  border-radius: 18px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
   background: var(--brand);
   color: #fff;
   font-weight: 700;
-  box-shadow: var(--shadow);
+  font-size: 0.9rem;
 }
 
 .login-minimal-form input.login-error {
