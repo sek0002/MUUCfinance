@@ -108,6 +108,7 @@
       align-items: center;
       justify-content: space-between;
       gap: clamp(18px, 4vw, 48px);
+      min-width: 0;
     }
 
     .hero-title-row img {
@@ -116,6 +117,10 @@
       flex: 0 0 auto;
       margin-left: auto;
       filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.26));
+    }
+
+    .hero-title-row h1 {
+      flex: 1 1 auto;
     }
 
     .eyebrow {
@@ -135,6 +140,8 @@
       font-size: clamp(42px, 6.2vw, 82px);
       line-height: 0.9;
       letter-spacing: 0;
+      white-space: nowrap;
+      min-width: 0;
     }
 
     h2 {
@@ -725,6 +732,21 @@
         grid-template-columns: 1fr;
         gap: 8px;
       }
+
+      .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+
+      .tab, .tabs .finance-app-link {
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+
+      .tabs .finance-app-link {
+        margin-left: 0;
+      }
     }
 
     @media (max-width: 620px) {
@@ -735,23 +757,156 @@
 
       nav { justify-content: flex-start; }
 
-      .hero { padding-top: 42px; }
+      .hero {
+        min-height: auto;
+        padding: 32px 14px 28px;
+      }
+
+      main {
+        gap: 48px;
+        padding: 18px 14px 52px;
+      }
 
       .hero-title-row {
-        align-items: flex-start;
-        flex-direction: column;
+        align-items: center;
+        flex-direction: row;
+        gap: 10px;
       }
+
+      .hero-title-row img { width: 70px; }
+
+      .hero .eyebrow {
+        font-size: 16px;
+        letter-spacing: 0.14em;
+      }
+
+      h1 {
+        margin: 12px 0 14px;
+        font-size: 34px;
+        line-height: 0.96;
+      }
+
+      h2 { font-size: 30px; }
+
+      #delivered h2 { font-size: 26px; }
+
+      .actions {
+        gap: 8px;
+        margin-top: 20px;
+      }
+
+      .primary, .secondary {
+        min-height: 40px;
+        padding: 0 12px;
+        font-size: 14px;
+      }
+
+      .action-pin { font-size: 13px; }
 
       .section-head {
         align-items: start;
         flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px;
       }
 
-      .stats, .cards {
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .cards {
         grid-template-columns: 1fr;
       }
 
+      .hero .stats { margin-top: 20px; }
+
+      .stat, .card, .report-panel { padding: 14px; }
+
+      .hero .stat .num { font-size: 13px; }
+
+      .hero .stat .label {
+        font-size: 24px;
+        overflow-wrap: anywhere;
+      }
+
+      .savings-statement {
+        font-size: 24px;
+      }
+
+      .hero-timeline {
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .hero-timeline h2 { font-size: 28px; }
+
+      .hero-timeline img {
+        min-width: 680px;
+      }
+
       .tab-panel { padding: 14px; }
+
+      .visual-frame {
+        min-height: 300px;
+        justify-items: start;
+        overflow-x: auto;
+      }
+
+      .visual-frame img {
+        min-width: 680px;
+        max-height: none;
+      }
+
+      .pie-object {
+        min-width: 680px;
+        min-height: 360px;
+      }
+
+      .qr-grid {
+        grid-template-columns: repeat(5, minmax(150px, 1fr));
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .qr-card img { width: 86px; }
+
+      .qr-card h3 { font-size: 15px; }
+
+      .qr-card p { font-size: 12px; }
+
+      .why-grid {
+        grid-template-columns: repeat(3, minmax(220px, 1fr));
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .budget-meta {
+        flex-direction: column;
+        gap: 4px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      h1 { font-size: 28px; }
+
+      .hero-title-row img { width: 60px; }
+    }
+
+    @media (max-width: 360px) {
+      h1 { font-size: 22px; }
+
+      .hero-title-row {
+        gap: 8px;
+      }
+
+      .hero-title-row img { width: 46px; }
+    }
+
+    @media (max-width: 320px) {
+      h1 { font-size: 20px; }
+
+      .hero-title-row img { width: 42px; }
     }
   </style>
 </head>
