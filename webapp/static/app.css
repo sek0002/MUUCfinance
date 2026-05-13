@@ -968,6 +968,7 @@ td.amount { text-align: right; white-space: nowrap; }
   width: 100%;
   display: grid;
   grid-template-columns: minmax(280px, 440px);
+  grid-auto-flow: row;
   justify-content: center;
   gap: 18px;
   align-items: stretch;
@@ -981,10 +982,10 @@ td.amount { text-align: right; white-space: nowrap; }
   justify-content: center;
   min-height: 42px;
   padding: 0 18px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--success) 74%, white 26%);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 86%, transparent 14%);
-  color: var(--text);
+  background: var(--success);
+  color: #fff;
   font-size: 0.95rem;
   font-weight: 700;
   box-shadow: var(--shadow);
