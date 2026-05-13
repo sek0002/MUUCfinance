@@ -6,6 +6,7 @@
   <title>{{ app_name }}</title>
   <meta name="theme-color" content="#635bff" id="theme-color-meta">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="MUUC Finance">
   <link rel="manifest" href="/manifest.webmanifest?v={{ asset_version }}">
@@ -44,6 +45,7 @@
             <a class="menu-link{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
             <a class="menu-link{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
             <a class="menu-link{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>
+            <button type="button" class="menu-link button-link install-link" id="install-app" hidden>Install App</button>
             <button type="button" class="menu-link button-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">Dark Mode</button>
             {% if request.session.get("authenticated") %}
             <form method="post" action="/logout">
@@ -71,6 +73,31 @@
         navigator.serviceWorker.register("/sw.js?v={{ asset_version }}");
       });
     }
+    (function () {
+      var installButton = document.getElementById("install-app");
+      var deferredPrompt = null;
+      if (!installButton) return;
+
+      window.addEventListener("beforeinstallprompt", function (event) {
+        event.preventDefault();
+        deferredPrompt = event;
+        installButton.hidden = false;
+      });
+
+      window.addEventListener("appinstalled", function () {
+        deferredPrompt = null;
+        installButton.hidden = true;
+      });
+
+      installButton.addEventListener("click", async function () {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installButton.hidden = true;
+      });
+    })();
+
     (function () {
       var button = document.getElementById("theme-toggle");
       if (!button) return;
