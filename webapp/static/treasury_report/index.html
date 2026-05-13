@@ -108,6 +108,7 @@
       align-items: center;
       justify-content: space-between;
       gap: clamp(18px, 4vw, 48px);
+      min-width: 0;
     }
 
     .hero-title-row img {
@@ -135,6 +136,7 @@
       font-size: clamp(42px, 6.2vw, 82px);
       line-height: 0.9;
       letter-spacing: 0;
+      white-space: nowrap;
     }
 
     h2 {
@@ -738,9 +740,14 @@
       .hero { padding-top: 42px; }
 
       .hero-title-row {
-        align-items: flex-start;
-        flex-direction: column;
+        align-items: center;
+        flex-direction: row;
+        gap: 10px;
       }
+
+      .hero-title-row img { width: 70px; }
+
+      h1 { font-size: 34px; }
 
       .section-head {
         align-items: start;
@@ -752,6 +759,18 @@
       }
 
       .tab-panel { padding: 14px; }
+    }
+
+    @media (max-width: 430px) {
+      h1 { font-size: 28px; }
+
+      .hero-title-row img { width: 60px; }
+    }
+
+    @media (max-width: 360px) {
+      h1 { font-size: 22px; }
+
+      .hero-title-row img { width: 46px; }
     }
   </style>
 </head>
