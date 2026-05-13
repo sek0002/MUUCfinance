@@ -229,6 +229,11 @@ code, textarea, input, select, button { font: inherit; }
   color: var(--danger);
 }
 
+.install-link {
+  color: var(--brand);
+  font-weight: 600;
+}
+
 .source-pill {
   padding: 8px 12px;
   gap: 8px;
