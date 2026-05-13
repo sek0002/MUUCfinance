@@ -750,12 +750,21 @@
     }
 
     @media (max-width: 620px) {
+      body {
+        width: max-content;
+        min-width: 100%;
+      }
+
       .topbar {
         align-items: flex-start;
         flex-direction: column;
       }
 
       nav { justify-content: flex-start; }
+
+      .hero, main, .footer {
+        min-width: 100vw;
+      }
 
       .hero {
         min-height: auto;
@@ -837,6 +846,7 @@
       .hero-timeline {
         overflow-x: auto;
         padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
       }
 
       .hero-timeline h2 { font-size: 28px; }
@@ -851,6 +861,7 @@
         min-height: 300px;
         justify-items: start;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       .visual-frame img {
@@ -867,6 +878,7 @@
         grid-template-columns: repeat(5, minmax(150px, 1fr));
         overflow-x: auto;
         padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
       }
 
       .qr-card img { width: 86px; }
@@ -879,6 +891,7 @@
         grid-template-columns: repeat(3, minmax(220px, 1fr));
         overflow-x: auto;
         padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
       }
 
       .budget-meta {
