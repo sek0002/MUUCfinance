@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 24.0.2, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 120 1280 220" style="enable-background:new 0 0 1280 220;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#CFD9D3;stroke-width:12;stroke-linecap:round;}
+	.st1{fill:none;stroke:#D83A34;stroke-width:12;stroke-linecap:round;stroke-dasharray:2,24;}
+	.st2{fill:none;stroke:#90A197;stroke-width:3;}
+	.st3{fill:#FFFFFF;}
+	.st4{font-family:'Arial-BoldMT';}
+	.st5{font-size:27px;}
+	.st6{fill:#D92D20;}
+	.st7{enable-background:new    ;}
+	.st8{font-size:25px;}
+	.st9{fill:#FF0000;}
+	.st10{fill:#00FF33;}
+</style>
+<title  id="title">Projected Goals Timeline</title>
+<desc  id="desc">
+	A transparent-background timeline from 2022 to 2035. The current position, 2026, is shown with a large red triangle marker. The backdated red line from 2022 to 2026 is dotted. Major projected goal events are marked with big red dots in 2028, 2030, and 2035.
+	</desc>
+<g>
+	<g transform="translate(0 250)">
+		<line class="st0" x1="120" y1="0" x2="1160" y2="0"/>
+		<line class="st1" x1="120" y1="0" x2="440" y2="0"/>
+		<g>
+			<line class="st2" x1="120" y1="-20" x2="120" y2="20"/>
+			<line class="st2" x1="440" y1="-20" x2="440" y2="20"/>
+			<line class="st2" x1="600" y1="-20" x2="600" y2="20"/>
+			<line class="st2" x1="760" y1="-20" x2="760" y2="20"/>
+			<line class="st2" x1="1160" y1="-20" x2="1160" y2="20"/>
+		</g>
+		<g>
+			<text transform="matrix(1 0 0 1 89.5293 52)" class="st3 st4 st5">2022</text>
+			<text transform="matrix(1 0 0 1 409.5293 52)" class="st3 st4 st5">2026</text>
+			<text transform="matrix(1 0 0 1 569.5293 52)" class="st3 st4 st5">2028</text>
+			<text transform="matrix(1 0 0 1 729.5293 52)" class="st3 st4 st5">2030</text>
+			<text transform="matrix(1 0 0 1 1129.5293 52)" class="st3 st4 st5">2035</text>
+		</g>
+		<g>
+			<polygon class="st6" points="440,-44 404,28 476,28 			"/>
+			<circle class="st6" cx="600" cy="0" r="25"/>
+			<circle class="st6" cx="760" cy="0" r="25"/>
+			<circle class="st6" cx="1160" cy="0" r="25"/>
+		</g>
+		<g>
+			<text transform="matrix(1 0 0 1 585.2178 -60)" class="st7"><tspan x="0" y="0" class="st3 st4 st8">Car replacement </tspan><tspan x="-11.8" y="30" class="st9 st4 st8">(Under discussion)</tspan></text>
+			<text transform="matrix(1 0 0 1 77.6523 -44)" class="st3 st4 st8">COVID-19</text>
+			<text transform="matrix(1 0 0 1 863.1221 -59)" class="st7"><tspan x="0" y="0" class="st3 st4 st8">Boat Replacement </tspan><tspan x="-4.1" y="30" class="st10 st4 st8">(budgeted on track)</tspan></text>
+		</g>
+	</g>
+</g>
+</svg>

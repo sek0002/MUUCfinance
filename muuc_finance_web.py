@@ -1524,6 +1524,11 @@ def service_worker() -> FileResponse:
     return FileResponse(SERVICE_WORKER_PATH, media_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
 
 
+@app.get("/treasury-report")
+def treasury_report() -> FileResponse:
+    return FileResponse(STATIC_DIR / "treasury_report" / "index.html", media_type="text/html")
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, message: Optional[str] = None) -> HTMLResponse:
     message_text = {

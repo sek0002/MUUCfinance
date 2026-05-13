@@ -967,7 +967,7 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-shell {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(340px, 1fr));
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
   gap: 18px;
   align-items: stretch;
 }
@@ -1012,6 +1012,19 @@ td.amount { text-align: right; white-space: nowrap; }
 .login-minimal-form input::placeholder {
   font-size: 0.82em;
   letter-spacing: 0.18em;
+}
+
+.login-report-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 0 18px;
+  border-radius: 18px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: var(--shadow);
 }
 
 .login-minimal-form input.login-error {

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 24.0.2, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 1280 860" style="enable-background:new 0 0 1280 860;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;}
+	.st1{font-family:'Arial-BoldMT';}
+	.st2{font-size:36px;}
+	.st3{fill:none;stroke:#FFFFFF;stroke-miterlimit:10;}
+	.st4{font-family:'ArialMT';}
+	.st5{font-size:24px;}
+	.st6{fill:url(#SVGID_1_);}
+	.st7{fill:url(#SVGID_2_);}
+	.st8{fill:url(#SVGID_3_);}
+	.st9{fill:url(#SVGID_4_);}
+	.st10{font-size:20px;}
+	.st11{font-size:26px;}
+	.st12{font-size:22px;}
+	.st13{fill:none;stroke:#FF0000;stroke-width:12;stroke-linecap:round;stroke-linejoin:round;}
+	.st14{fill:none;stroke:#FF0000;stroke-width:12;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:22,22;}
+</style>
+<title  id="title">Net Savings Bar Graph and Growth Line Graph</title>
+<desc  id="desc">
+	A transparent-background side-by-side chart. The left bar graph shows net savings of $7,792 in 2022, $9,373 in 2023, $6,746 in 2024, and $8,364 in 2025. The right line graph shows actual bank balance values from $43,000 in 2022 to $92,958 in 2026, then projects a fixed annual increase of $12,489.50 to about $142,916 in 2030.
+	</desc>
+<g>
+	<g transform="translate(64 64)">
+		<text transform="matrix(1 0 0 1 84.8178 103.7944)" class="st0 st1 st2">Net Operational Income</text>
+	</g>
+	<g transform="translate(64 136)">
+		<g>
+			<g>
+				<line class="st3" x1="77" y1="610" x2="509" y2="610"/>
+				<text transform="matrix(1 0 0 1 41.3047 616)" class="st0 st4 st5">$0</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 9.2891 480)" class="st0 st4 st5">$2.5k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 29.3047 343)" class="st0 st4 st5">$5k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 9.2891 207)" class="st0 st4 st5">$7.5k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 15.957 70)" class="st0 st4 st5">$10k</text>
+			</g>
+		</g>
+		<line class="st3" x1="77" y1="64" x2="77" y2="610"/>
+		<g>
+			
+				<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="546.5735" y1="-3.752347e-02" x2="546.5735" y2="0.9625" gradientTransform="matrix(68 0 0 426 -37028 199.985)">
+				<stop  offset="0" style="stop-color:#2AA66A"/>
+				<stop  offset="1" style="stop-color:#137348"/>
+			</linearGradient>
+			<path class="st6" d="M111,184h56c3.3,0,6,2.7,6,6v414c0,3.3-2.7,6-6,6h-56c-3.3,0-6-2.7-6-6V190C105,186.7,107.7,184,111,184z"/>
+			
+				<linearGradient id="SVGID_2_" gradientUnits="userSpaceOnUse" x1="546.5735" y1="-3.126465e-02" x2="546.5735" y2="0.9687" gradientTransform="matrix(68 0 0 512 -36920 114.0075)">
+				<stop  offset="0" style="stop-color:#2AA66A"/>
+				<stop  offset="1" style="stop-color:#137348"/>
+			</linearGradient>
+			<path class="st7" d="M219,98h56c3.3,0,6,2.7,6,6v500c0,3.3-2.7,6-6,6h-56c-3.3,0-6-2.7-6-6V104C213,100.7,215.7,98,219,98z"/>
+			
+				<linearGradient id="SVGID_3_" gradientUnits="userSpaceOnUse" x1="546.5735" y1="-4.350883e-02" x2="546.5735" y2="0.9565" gradientTransform="matrix(68 0 0 368 -36812 258.0112)">
+				<stop  offset="0" style="stop-color:#2AA66A"/>
+				<stop  offset="1" style="stop-color:#137348"/>
+			</linearGradient>
+			<path class="st8" d="M327,242h56c3.3,0,6,2.7,6,6v356c0,3.3-2.7,6-6,6h-56c-3.3,0-6-2.7-6-6V248C321,244.7,323.7,242,327,242z"/>
+			
+				<linearGradient id="SVGID_4_" gradientUnits="userSpaceOnUse" x1="546.5735" y1="-3.498632e-02" x2="546.5735" y2="0.965" gradientTransform="matrix(68 0 0 457 -36704 168.9887)">
+				<stop  offset="0" style="stop-color:#2AA66A"/>
+				<stop  offset="1" style="stop-color:#137348"/>
+			</linearGradient>
+			<path class="st9" d="M435,153h56c3.3,0,6,2.7,6,6v445c0,3.3-2.7,6-6,6h-56c-3.3,0-6-2.7-6-6V159C429,155.7,431.7,153,435,153z"/>
+		</g>
+		<g>
+			<text transform="matrix(1 0 0 1 108.4141 160)" class="st0 st1 st10">$7,792</text>
+			<text transform="matrix(1 0 0 1 216.4141 74)" class="st0 st1 st10">$9,373</text>
+			<text transform="matrix(1 0 0 1 324.4141 218)" class="st0 st1 st10">$6,746</text>
+			<text transform="matrix(1 0 0 1 432.4141 129)" class="st0 st1 st10">$8,364</text>
+		</g>
+		<g>
+			<text transform="matrix(1 0 0 1 115.8662 644)" class="st0 st1 st11">2022</text>
+			<text transform="matrix(1 0 0 1 223.8662 644)" class="st0 st1 st11">2023</text>
+			<text transform="matrix(1 0 0 1 331.8662 644)" class="st0 st1 st11">2024</text>
+			<text transform="matrix(1 0 0 1 439.8662 644)" class="st0 st1 st11">2025</text>
+		</g>
+	</g>
+	<g transform="translate(710 64)">
+		<text transform="matrix(1 0 0 1 145.1203 112.389)" class="st0 st1 st2">Bank Balance</text>
+		<g>
+			<text transform="matrix(1 0 0 1 49.2129 665.6663)" class="st0 st1 st5">2022: $43,000</text>
+			<text transform="matrix(1 0 0 1 291.2129 452.6663)" class="st0 st1 st5">2026: $92,958</text>
+			<text transform="matrix(1 0 0 1 300.5316 207.4389)" class="st0 st1 st5">2030: ~$150,000</text>
+		</g>
+	</g>
+	<g transform="translate(710 184)">
+		<g>
+			<g>
+				<line class="st3" x1="2" y1="561" x2="520" y2="561"/>
+				<text transform="matrix(1 0 0 1 -53.7061 567)" class="st0 st4 st12">$40k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 -53.7061 425)" class="st0 st4 st12">$70k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 -65.9414 283)" class="st0 st4 st12">$100k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 -65.9414 142)" class="st0 st4 st12">$130k</text>
+			</g>
+			<g>
+				<text transform="matrix(1 0 0 1 -65.9414 47)" class="st0 st4 st12">$150k</text>
+			</g>
+		</g>
+		<line class="st3" x1="2" y1="41" x2="2" y2="561"/>
+		<path class="st13" d="M2,547l64.8-43l64.7-84l64.8-57l64.7-52"/>
+		<path class="st14" d="M261,311l64.8-59l64.7-59l64.8-59L520,75"/>
+		<g>
+			<text transform="matrix(1 0 0 1 -21.1338 595)" class="st0 st1 st11">2022</text>
+			<text transform="matrix(1 0 0 1 108.8662 595)" class="st0 st1 st11">2024</text>
+			<text transform="matrix(1 0 0 1 238.8662 595)" class="st0 st1 st11">2026</text>
+			<text transform="matrix(1 0 0 1 368.8662 595)" class="st0 st1 st11">2028</text>
+			<text transform="matrix(1 0 0 1 498.8662 595)" class="st0 st1 st11">2030</text>
+		</g>
+	</g>
+</g>
+<text transform="matrix(1 0 0 1 736.0673 388.2225)" class="st0 st1 st11">~20-25%/year growth</text>
+</svg>
