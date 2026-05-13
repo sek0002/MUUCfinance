@@ -975,8 +975,8 @@ td.amount { text-align: right; white-space: nowrap; }
 }
 
 .login-report-strip {
-  width: min(100%, 760px);
-  margin: 0 auto 18px;
+  width: min(100%, 420px);
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -988,7 +988,6 @@ td.amount { text-align: right; white-space: nowrap; }
   color: #fff;
   font-size: 0.95rem;
   font-weight: 700;
-  box-shadow: var(--shadow);
 }
 
 .login-panel {
