@@ -46,7 +46,6 @@
             <a class="menu-link{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
             <a class="menu-link{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>
             <a class="menu-link" href="https://muuc-upload.sek-lab.com">Upload Portal</a>
-            <button type="button" class="menu-link button-link install-link" id="install-app" hidden>Install App</button>
             <button type="button" class="menu-link button-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">Dark Mode</button>
             {% if request.session.get("authenticated") %}
             <form method="post" action="/logout">
@@ -74,31 +73,6 @@
         navigator.serviceWorker.register("/sw.js?v={{ asset_version }}");
       });
     }
-    (function () {
-      var installButton = document.getElementById("install-app");
-      var deferredPrompt = null;
-      if (!installButton) return;
-
-      window.addEventListener("beforeinstallprompt", function (event) {
-        event.preventDefault();
-        deferredPrompt = event;
-        installButton.hidden = false;
-      });
-
-      window.addEventListener("appinstalled", function () {
-        deferredPrompt = null;
-        installButton.hidden = true;
-      });
-
-      installButton.addEventListener("click", async function () {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        installButton.hidden = true;
-      });
-    })();
-
     (function () {
       var button = document.getElementById("theme-toggle");
       if (!button) return;

@@ -206,7 +206,7 @@
                 </thead>
                 <tbody>
                   {% for row in chart_detail_rows %}
-                  <tr>
+                  <tr{% if row.has_breakdown %} class="expandable-detail-trigger" data-expand-target="chart-detail-{{ loop.index0 }}" aria-expanded="false" tabindex="0"{% endif %}>
                     {% for column in chart_detail_columns %}
                     <td
                       {% if column.numeric %}class="amount"{% endif %}
@@ -216,6 +216,31 @@
                     </td>
                     {% endfor %}
                   </tr>
+                  {% if row.has_breakdown %}
+                  <tr class="chart-breakdown-row" data-detail-row id="chart-detail-{{ loop.index0 }}" hidden>
+                    <td colspan="{{ chart_detail_columns | length }}">
+                      <div class="chart-breakdown-grid">
+                        {% for group in row.breakdown %}
+                        <div class="chart-breakdown-group">
+                          <div class="chart-breakdown-title">{{ group.label }}</div>
+                          {% if group.rows %}
+                          <div class="chart-breakdown-list">
+                            {% for item in group.rows %}
+                            <div class="chart-breakdown-item">
+                              <span>{{ item.category }}</span>
+                              <strong>{{ item.amount }}</strong>
+                            </div>
+                            {% endfor %}
+                          </div>
+                          {% else %}
+                          <div class="muted">No {{ group.label | lower }}</div>
+                          {% endif %}
+                        </div>
+                        {% endfor %}
+                      </div>
+                    </td>
+                  </tr>
+                  {% endif %}
                   {% endfor %}
                 </tbody>
               </table>
@@ -355,7 +380,7 @@
                   }
                 });
                 button.dataset.direction = next;
-                const rows = Array.from(tbody.querySelectorAll("tr"));
+                const rows = Array.from(tbody.querySelectorAll("tr:not([data-detail-row])"));
                 rows.sort(function (a, b) {
                   const aValue = a.children[columnIndex];
                   const bValue = b.children[columnIndex];
@@ -367,9 +392,30 @@
                   return next === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
                 });
                 rows.forEach(function (row) {
+                  const detailId = row.dataset.expandTarget;
+                  const detailRow = detailId ? document.getElementById(detailId) : null;
                   tbody.appendChild(row);
+                  if (detailRow) {
+                    tbody.appendChild(detailRow);
+                  }
                 });
               });
+            });
+          });
+          document.querySelectorAll("[data-expand-target]").forEach(function (row) {
+            const toggle = function () {
+              const target = document.getElementById(row.dataset.expandTarget);
+              if (!target) return;
+              const expanded = row.getAttribute("aria-expanded") === "true";
+              row.setAttribute("aria-expanded", expanded ? "false" : "true");
+              target.hidden = expanded;
+            };
+            row.addEventListener("click", toggle);
+            row.addEventListener("keydown", function (event) {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggle();
+              }
             });
           });
         });

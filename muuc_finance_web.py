@@ -566,6 +566,38 @@ def aggregate_series(frame: pd.DataFrame, window_key: str) -> pd.Series:
     return out.groupby("bucket")["amount"].sum().sort_index()
 
 
+def frame_with_bucket(frame: pd.DataFrame, window_key: str) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
+    out = frame.copy()
+    dates = pd.to_datetime(out["date"], errors="coerce")
+    if window_key == "day":
+        out["bucket"] = dates.dt.strftime("%Y-%m-%d")
+    elif window_key == "week":
+        out["bucket"] = dates.dt.to_period("W").astype(str)
+    elif window_key == "year":
+        out["bucket"] = dates.dt.strftime("%Y")
+    else:
+        out["bucket"] = dates.dt.to_period("M").astype(str)
+    return out[out["bucket"].notna()].copy()
+
+
+def category_breakdown_rows(frame: pd.DataFrame, bucket: str) -> list[dict[str, Any]]:
+    if frame.empty or "category" not in frame.columns:
+        return []
+    bucket_frame = frame[frame["bucket"] == bucket].copy()
+    if bucket_frame.empty:
+        return []
+    grouped = bucket_frame.groupby("category")["amount"].sum().sort_values(ascending=False)
+    rows: list[dict[str, Any]] = []
+    for category, amount in grouped.items():
+        amount_value = float(amount)
+        if amount_value == 0:
+            continue
+        rows.append({"category": str(category), "amount": currency(amount_value), "_sort_amount": amount_value})
+    return rows
+
+
 def format_bucket_label(bucket: str, window_key: str) -> str:
     try:
         if window_key == "day":
@@ -1264,6 +1296,8 @@ def category_subgroup_rows(income: pd.DataFrame, expenses: pd.DataFrame) -> list
 
 
 def chart_totals_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, window_key: str) -> list[dict[str, Any]]:
+    bucketed_income = frame_with_bucket(income, window_key)
+    bucketed_expenses = frame_with_bucket(expenses, window_key)
     income_series = aggregate_series(income, window_key)
     expense_series = aggregate_series(expenses, window_key)
     labels = list(dict.fromkeys(list(income_series.index) + list(expense_series.index)))
@@ -1272,12 +1306,19 @@ def chart_totals_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, windo
     for label in labels:
         income_value = float(income_series.get(label, 0.0))
         expense_value = float(expense_series.get(label, 0.0))
+        income_breakdown = category_breakdown_rows(bucketed_income, label)
+        expense_breakdown = category_breakdown_rows(bucketed_expenses, label)
         rows.append(
             {
                 "period": format_bucket_label(label, window_key),
                 "income": currency(income_value),
                 "expenses": currency(expense_value),
                 "net": currency(income_value - expense_value),
+                "breakdown": [
+                    {"label": "Income", "rows": income_breakdown},
+                    {"label": "Expenses", "rows": expense_breakdown},
+                ],
+                "has_breakdown": bool(income_breakdown or expense_breakdown),
                 "_sort_period": label,
                 "_sort_income": income_value,
                 "_sort_expenses": expense_value,

@@ -752,6 +752,75 @@ button {
   background: color-mix(in srgb, var(--brand-soft) 52%, transparent 48%);
 }
 
+.expandable-detail-trigger {
+  cursor: pointer;
+}
+
+.expandable-detail-trigger td:first-child {
+  position: relative;
+  padding-left: 24px;
+}
+
+.expandable-detail-trigger td:first-child::before {
+  content: "+";
+  position: absolute;
+  left: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.expandable-detail-trigger[aria-expanded="true"] td:first-child::before {
+  content: "-";
+}
+
+.chart-breakdown-row td {
+  padding: 0 10px 12px;
+  background: color-mix(in srgb, var(--panel-soft) 72%, var(--panel) 28%);
+}
+
+.chart-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.chart-breakdown-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chart-breakdown-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.chart-breakdown-list {
+  display: grid;
+  gap: 4px;
+}
+
+.chart-breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent 28%);
+}
+
+.chart-breakdown-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chart-breakdown-item strong {
+  white-space: nowrap;
+}
+
 .sort-button {
   width: 100%;
   padding: 0;
