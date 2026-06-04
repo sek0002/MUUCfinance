@@ -44,7 +44,9 @@
             {% endif %}
             <a class="menu-link{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
             <a class="menu-link{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
+            {% if not is_demo_session %}
             <a class="menu-link{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>
+            {% endif %}
             <a class="menu-link" href="https://muuc-upload.sek-lab.com">Upload Portal</a>
             <button type="button" class="menu-link button-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">Dark Mode</button>
             {% if request.session.get("authenticated") %}
