@@ -78,6 +78,7 @@ RULE_FILE_MAP = {
     "income": ("income_rules.csv", INCOME_CATEGORIES),
     "expense": ("expense_rules.csv", EXPENSE_CATEGORIES),
 }
+SOURCE_BACKUP_KEEP = 10
 WEB_DATA_DIR = Path(os.getenv("MUUC_WEB_DATA_DIR", str(SETTINGS_DIR / "web")))
 WEB_SOURCE_DIR = WEB_DATA_DIR / "source"
 WEB_RULES_DIR = WEB_DATA_DIR / "config"
@@ -244,6 +245,63 @@ def current_rule_paths(request: Optional[Request] = None) -> tuple[Path, Path]:
         root = ensure_demo_session(request) / "config"
         return root / "income_rules.csv", root / "expense_rules.csv"
     return ensure_web_rule_file("income_rules.csv"), ensure_web_rule_file("expense_rules.csv")
+
+
+def source_backup_root(request: Optional[Request] = None) -> Path:
+    if request is not None and is_demo_session(request):
+        return ensure_demo_session(request) / "source" / ".backups"
+    return WEB_DATA_DIR / "source_backups"
+
+
+def source_backup_dir(request: Optional[Request], source_key: str) -> Path:
+    return source_backup_root(request) / source_key
+
+
+def source_backups(request: Optional[Request], source_key: str) -> list[Path]:
+    path = source_backup_dir(request, source_key)
+    if not path.exists():
+        return []
+    backups = [item for item in path.iterdir() if item.is_file() and item.name.endswith(".csv")]
+    backups.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    return backups
+
+
+def prune_source_backups(request: Optional[Request], source_key: str) -> None:
+    backups = source_backups(request, source_key)
+    for item in backups[SOURCE_BACKUP_KEEP:]:
+        try:
+            item.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def latest_source_backup(request: Optional[Request], source_key: str) -> Optional[Path]:
+    backups = source_backups(request, source_key)
+    return backups[0] if backups else None
+
+
+def create_source_backup(request: Request, source_key: str, source_path: Path) -> Optional[Path]:
+    if not source_path.exists():
+        return None
+    backup_dir = source_backup_dir(request, source_key)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / f"{int(time.time_ns())}_{source_path.name}"
+    shutil.copyfile(source_path, backup_path)
+    prune_source_backups(request, source_key)
+    return backup_path
+
+
+def restore_latest_source_backup(request: Request, source_key: str, destination: Path) -> bool:
+    backup_path = latest_source_backup(request, source_key)
+    if not backup_path:
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(backup_path, destination)
+    try:
+        backup_path.unlink()
+    except FileNotFoundError:
+        pass
+    return True
 
 
 def empty_income_frame() -> pd.DataFrame:
@@ -1301,6 +1359,7 @@ def source_rows(request: Optional[Request] = None) -> list[dict[str, Any]]:
             "label": labels[key],
             "path": str(paths[key]),
             "exists": "1" if paths[key].exists() else "",
+            "has_backup": bool(source_backups(request, key)),
             "latest": latest_entry_label(key, paths[key]),
             "preview": preview_csv(paths[key]),
         }
@@ -1660,6 +1719,11 @@ async def upload_source(request: Request, source_key: str, file: UploadFile) -> 
         return RedirectResponse(url="/files?message=Please upload a CSV file.", status_code=303)
 
     destination = current_source_paths(request)[source_key]
+    if destination.exists():
+        try:
+            create_source_backup(request, source_key, destination)
+        except Exception as exc:
+            return RedirectResponse(url=f"/files?message=Failed to backup current file before append: {exc}", status_code=303)
     contents = await file.read()
     try:
         added_rows, skipped_rows = merge_csv_bytes(destination, contents)
@@ -1686,6 +1750,33 @@ def download_source(request: Request, source_key: str) -> StreamingResponse:
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
     )
+
+
+@app.post("/source/{source_key}/delete")
+def delete_source(request: Request, source_key: str) -> RedirectResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    if source_key not in SOURCE_KEYS:
+        raise HTTPException(status_code=404, detail="Unknown source key")
+    destination = current_source_paths(request)[source_key]
+    if destination.exists():
+        destination.unlink()
+        return RedirectResponse(url="/files?message=Deleted source file.", status_code=303)
+    return RedirectResponse(url="/files?message=Source file does not exist.", status_code=303)
+
+
+@app.post("/source/{source_key}/revert")
+def revert_source(request: Request, source_key: str) -> RedirectResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    if source_key not in SOURCE_KEYS:
+        raise HTTPException(status_code=404, detail="Unknown source key")
+    destination = current_source_paths(request)[source_key]
+    if not restore_latest_source_backup(request, source_key, destination):
+        return RedirectResponse(url="/files?message=No previous source snapshot is available to restore.", status_code=303)
+    return RedirectResponse(url="/files?message=Reverted source file to the previous upload state.", status_code=303)
 
 
 @app.post("/upload/rules/{rule_key}")

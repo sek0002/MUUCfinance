@@ -45,10 +45,20 @@
         {% if source.exists %}
         <a class="ghost-link" href="/download/source/{{ source.key }}">Download Current</a>
         {% endif %}
+        {% if source.has_backup %}
+        <form method="post" action="/source/{{ source.key }}/revert" class="upload-form" onsubmit="return confirm('Revert {{ source.label }} to the previous upload state?');">
+          <button type="submit" class="button-danger">Revert previous state</button>
+        </form>
+        {% endif %}
         <form method="post" action="/upload/{{ source.key }}" enctype="multipart/form-data" class="upload-form">
           <input type="file" name="file" accept=".csv" required>
           <button type="submit">{% if source.exists %}Append Upload{% else %}Upload CSV{% endif %}</button>
         </form>
+        {% if source.exists %}
+        <form method="post" action="/source/{{ source.key }}/delete" class="upload-form" onsubmit="return confirm('Delete the current {{ source.label }} file?');">
+          <button type="submit" class="button-danger">Delete current file</button>
+        </form>
+        {% endif %}
       </div>
     </article>
     {% endfor %}
