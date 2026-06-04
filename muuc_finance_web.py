@@ -79,6 +79,11 @@ RULE_FILE_MAP = {
     "expense": ("expense_rules.csv", EXPENSE_CATEGORIES),
 }
 SOURCE_BACKUP_KEEP = 10
+SOURCE_UPLOAD_COLUMNS = {
+    "stripe": ["Created date (UTC)", "Status", "Description", "Converted Amount", "Converted Amount Refunded", "Fee", "id"],
+    "teamapp": ["date", "paid", "items", "total", "name", "email", "purchase_id"],
+    "everyday": ["Date", "Amount", "Transaction Type", "Transaction Details", "Merchant Name"],
+}
 WEB_DATA_DIR = Path(os.getenv("MUUC_WEB_DATA_DIR", str(SETTINGS_DIR / "web")))
 WEB_SOURCE_DIR = WEB_DATA_DIR / "source"
 WEB_RULES_DIR = WEB_DATA_DIR / "config"
@@ -352,14 +357,23 @@ def load_bundle_safe(request: Optional[Request] = None) -> tuple[AnalysisBundle,
         return empty_bundle(), missing_source_keys(request)
 
 
-def merge_csv_bytes(existing_path: Path, uploaded_bytes: bytes) -> tuple[int, int]:
+def filter_source_upload_columns(source_key: str, frame: pd.DataFrame) -> pd.DataFrame:
+    allowed = SOURCE_UPLOAD_COLUMNS.get(source_key)
+    if not allowed:
+        return frame
+    return frame[[column for column in frame.columns if column in allowed]]
+
+
+def merge_csv_bytes(existing_path: Path, uploaded_bytes: bytes, source_key: str) -> tuple[int, int]:
     uploaded_df = pd.read_csv(io.BytesIO(uploaded_bytes))
+    uploaded_df = filter_source_upload_columns(source_key, uploaded_df)
     if not existing_path.exists():
         existing_path.parent.mkdir(parents=True, exist_ok=True)
         uploaded_df.to_csv(existing_path, index=False)
         return len(uploaded_df.index), 0
 
     existing_df = pd.read_csv(existing_path)
+    existing_df = filter_source_upload_columns(source_key, existing_df)
     all_columns = list(dict.fromkeys(list(existing_df.columns) + list(uploaded_df.columns)))
     existing_aligned = existing_df.reindex(columns=all_columns)
     uploaded_aligned = uploaded_df.reindex(columns=all_columns)
@@ -1726,7 +1740,7 @@ async def upload_source(request: Request, source_key: str, file: UploadFile) -> 
             return RedirectResponse(url=f"/files?message=Failed to backup current file before append: {exc}", status_code=303)
     contents = await file.read()
     try:
-        added_rows, skipped_rows = merge_csv_bytes(destination, contents)
+        added_rows, skipped_rows = merge_csv_bytes(destination, contents, source_key)
     except Exception as exc:
         return RedirectResponse(url=f"/files?message=Failed to merge uploaded CSV: {exc}", status_code=303)
     return RedirectResponse(
