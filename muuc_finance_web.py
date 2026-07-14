@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import time
+import traceback
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
@@ -592,6 +593,20 @@ def export_draw_text(
     draw.text((x, y), text_value, font=font, fill=fill)
 
 
+def export_rounded_rectangle(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int, int, int],
+    radius: int,
+    fill: Optional[str] = None,
+    outline: Optional[str] = None,
+    width: int = 1,
+) -> None:
+    if hasattr(draw, "rounded_rectangle"):
+        draw.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline, width=width)
+        return
+    draw.rectangle(xy, fill=fill, outline=outline, width=width)
+
+
 def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
     short_labels = {
         "Gear Servicing": "Service",
@@ -712,7 +727,7 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
                 break
         mask = Image.new("L", image.size, 0)
         mask_draw = ImageDraw.Draw(mask)
-        mask_draw.rounded_rectangle((x, y, x + fill_width, y + bar_h), radius=radius, fill=255)
+        export_rounded_rectangle(mask_draw, (x, y, x + fill_width, y + bar_h), radius=radius, fill=255)
         image.paste(layer, (0, 0), mask)
 
     radius = 6 * scale
@@ -738,7 +753,8 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
             fill=ytd_red if ytd_exceeded and not is_total else text,
             anchor="lm",
         )
-        draw.rounded_rectangle(
+        export_rounded_rectangle(
+            draw,
             (bx, by, bx + bar_w, by + bar_h),
             radius=radius,
             fill=track,
@@ -749,7 +765,8 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         if is_total:
             draw_total_stack(bx, by, fill_w, radius)
             draw = ImageDraw.Draw(image)
-            draw.rounded_rectangle(
+            export_rounded_rectangle(
+                draw,
                 (bx, by, bx + bar_w, by + bar_h),
                 radius=radius,
                 outline=track_edge,
@@ -758,7 +775,7 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         else:
             fill = category_colors.get(str(row["label"]), "#cbd5e1") if annual > 0 else "#dbe4ef"
             if fill_w > 0:
-                draw.rounded_rectangle((bx, by, bx + fill_w, by + bar_h), radius=radius, fill=fill)
+                export_rounded_rectangle(draw, (bx, by, bx + fill_w, by + bar_h), radius=radius, fill=fill)
                 if fill_w < radius:
                     draw.rectangle((bx + fill_w // 2, by, bx + fill_w, by + bar_h), fill=fill)
 
@@ -818,6 +835,55 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         )
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def render_budget_export_fallback_png(rows: list[dict[str, Any]]) -> bytes:
+    scale = 2
+    width = 560 * scale
+    row_h = 24 * scale
+    pad = 12 * scale
+    bar_x = 110 * scale
+    bar_w = 300 * scale
+    height = pad * 2 + row_h * (len(rows) + 1)
+    image = Image.new("RGB", (width, height), "#f8fafc")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default()
+    total_budget = sum(float(row["annual_budget"]) for row in rows)
+    total_current = sum(float(row["current_ytd"]) for row in rows)
+    draw_rows = [
+        {"label": "Total", "annual_budget": total_budget, "current_ytd": total_current},
+        *rows,
+    ]
+    max_percent = max(
+        [
+            (float(row["current_ytd"]) / float(row["annual_budget"]) * 100)
+            for row in draw_rows
+            if float(row.get("annual_budget") or 0) > 0
+        ]
+        + [100.0]
+    )
+    graph_max = max(100.0, math.ceil(max_percent / 25.0) * 25.0)
+    colors = ["#c4b5fd", "#bae6fd", "#bbf7d0", "#fecaca", "#fed7aa", "#ddd6fe", "#f5d0fe", "#99f6e4", "#fde68a"]
+    for index, row in enumerate(draw_rows):
+        y = pad + index * row_h
+        annual = float(row["annual_budget"])
+        current = float(row["current_ytd"])
+        percent = (current / annual * 100) if annual > 0 else 0.0
+        fill_w = int(min(percent, graph_max) / graph_max * bar_w)
+        draw.text((pad, y + 5 * scale), str(row["label"]), fill="#111827", font=font)
+        draw.rectangle((bar_x, y + 3 * scale, bar_x + bar_w, y + 14 * scale), fill="#eef2f7", outline="#cbd5e1")
+        if fill_w > 0:
+            draw.rectangle((bar_x, y + 3 * scale, bar_x + fill_w, y + 14 * scale), fill=colors[index % len(colors)])
+        draw.text(
+            (bar_x + 4 * scale, y + 5 * scale),
+            f"{compact_currency(current)} / {compact_currency(annual)}",
+            fill="#111827",
+            font=font,
+        )
+        draw.text((bar_x + bar_w + 8 * scale, y + 5 * scale), f"{percent:.0f}%", fill="#64748b", font=font)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -2269,7 +2335,11 @@ def export_budget_chart(request: Request) -> StreamingResponse:
         return auth_redirect
     bundle, _missing_sources = load_bundle_safe(request)
     rows = budget_summary_rows(bundle, request)
-    png_bytes = render_budget_export_png(rows)
+    try:
+        png_bytes = render_budget_export_png(rows)
+    except Exception:
+        traceback.print_exc()
+        png_bytes = render_budget_export_fallback_png(rows)
     filename = f"budget-summary-{date.today().isoformat()}.png"
     return StreamingResponse(
         io.BytesIO(png_bytes),
