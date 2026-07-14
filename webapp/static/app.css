@@ -489,6 +489,9 @@ code, textarea, input, select, button { font: inherit; }
   top: 0;
   bottom: 0;
   min-width: 2px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
 .budget-bar-segment.first {
@@ -506,6 +509,18 @@ code, textarea, input, select, button { font: inherit; }
 .budget-bar-segment.current,
 .budget-bar-segment.previous {
   box-shadow: inset -1px 0 color-mix(in srgb, var(--panel) 60%, transparent 40%);
+}
+
+.budget-bar-segment-label {
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .budget-marker {
