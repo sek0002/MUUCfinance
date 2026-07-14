@@ -522,7 +522,9 @@ def compact_currency(value: float) -> str:
     if value <= 0:
         return "--"
     if value >= 1000:
-        amount = f"{value / 1000:.1f}".removesuffix(".0")
+        amount = f"{value / 1000:.1f}"
+        if amount.endswith(".0"):
+            amount = amount[:-2]
         return f"${amount}k"
     return f"${value:.0f}"
 
@@ -549,14 +551,45 @@ def budget_export_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont 
 
 
 def fit_export_text(draw: ImageDraw.ImageDraw, text_value: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_width: int) -> str:
-    if draw.textlength(text_value, font=font) <= max_width:
+    if export_text_size(draw, text_value, font)[0] <= max_width:
         return text_value
-    if draw.textlength("..", font=font) > max_width:
+    if export_text_size(draw, "..", font)[0] > max_width:
         return ""
     result = text_value
-    while result and draw.textlength(result + "..", font=font) > max_width:
+    while result and export_text_size(draw, result + "..", font)[0] > max_width:
         result = result[:-1]
     return result + ".." if result else ""
+
+
+def export_text_size(draw: ImageDraw.ImageDraw, text_value: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> tuple[int, int]:
+    try:
+        box = draw.textbbox((0, 0), text_value, font=font)
+        return int(box[2] - box[0]), int(box[3] - box[1])
+    except AttributeError:
+        return tuple(int(value) for value in draw.textsize(text_value, font=font))
+
+
+def export_draw_text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text_value: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    fill: str,
+    anchor: str = "la",
+) -> None:
+    x, y = xy
+    width, height = export_text_size(draw, text_value, font)
+    horizontal = anchor[0] if anchor else "l"
+    vertical = anchor[-1] if anchor else "a"
+    if horizontal == "m":
+        x -= width // 2
+    elif horizontal == "r":
+        x -= width
+    if vertical == "m":
+        y -= height // 2
+    elif vertical == "s":
+        y -= height
+    draw.text((x, y), text_value, font=font, fill=fill)
 
 
 def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
@@ -645,7 +678,8 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         ],
         fill=pace,
     )
-    draw.text(
+    export_draw_text(
+        draw,
         (pace_x, marker_base_y - 2 * scale),
         today.strftime("%d %b"),
         font=date_font,
@@ -696,7 +730,8 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         budget_exceeded = annual > 0 and current > annual
         label = short_labels.get(str(row["label"]), str(row["label"]))
 
-        draw.text(
+        export_draw_text(
+            draw,
             (pad, cy),
             label,
             font=label_font,
@@ -745,11 +780,11 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
             bar_w - 9 * scale,
         )
         value_color = white if budget_exceeded else text
-        if budget_exceeded and draw.textlength(value_text, font=inside_font) + 10 * scale > fill_w:
+        if budget_exceeded and export_text_size(draw, value_text, inside_font)[0] + 10 * scale > fill_w:
             value_color = over_highlight
-        draw.text((bx + 5 * scale, cy), value_text, font=inside_font, fill=value_color, anchor="lm")
+        export_draw_text(draw, (bx + 5 * scale, cy), value_text, font=inside_font, fill=value_color, anchor="lm")
         pct_color = "#7c3aed" if is_total else (ytd_red if ytd_exceeded else muted)
-        draw.text((bx + bar_w + 6 * scale, cy), f"{percent_used:.0f}%", font=pct_font, fill=pct_color, anchor="lm")
+        export_draw_text(draw, (bx + bar_w + 6 * scale, cy), f"{percent_used:.0f}%", font=pct_font, fill=pct_color, anchor="lm")
         last_bar_bottom = by + bar_h
 
     axis_y = last_bar_bottom + 8 * scale
@@ -759,7 +794,7 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
     for tick in axis_ticks:
         tx = bx + int(tick / graph_max * bar_w)
         draw.line((tx, axis_y - 2 * scale, tx, axis_y), fill=axis, width=1 * scale)
-        draw.text((tx, axis_y + 2 * scale), f"{tick:.0f}%", font=axis_font, fill=axis, anchor="ma")
+        export_draw_text(draw, (tx, axis_y + 2 * scale), f"{tick:.0f}%", font=axis_font, fill=axis, anchor="ma")
 
     background = Image.new("RGB", (1, 1), bg).getpixel((0, 0))
     pixels = image.load()
