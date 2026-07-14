@@ -12,8 +12,11 @@
     <article class="panel budget-summary-panel">
       <div class="panel-head tight">
         <h2>{{ current_year }} Budget</h2>
-        <div class="muted">Compared with {{ previous_year }} year to date</div>
+        <div class="actions">
+          <a class="ghost-link" href="/budget/export.png">Export PNG</a>
+        </div>
       </div>
+      <div class="muted">Compared with {{ previous_year }} year to date</div>
       <div class="budget-summary-grid">
         <div class="summary-item">
           <span>Annual Budget</span>

@@ -24,6 +24,7 @@ from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from PIL import Image, ImageDraw, ImageFont
 from starlette.middleware.sessions import SessionMiddleware
 
 from muuc_finance_core import (
@@ -515,6 +516,274 @@ def budget_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "previous_percent_used": f"{previous_percent_used:.1f}%",
         "ytd_percent": "0.0%" if ytd_budget <= 0 else f"{(current_ytd / ytd_budget) * 100:.1f}%",
     }
+
+
+def compact_currency(value: float) -> str:
+    if value <= 0:
+        return "--"
+    if value >= 1000:
+        amount = f"{value / 1000:.1f}".removesuffix(".0")
+        return f"${amount}k"
+    return f"${value:.0f}"
+
+
+def budget_export_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    candidates: list[str] = []
+    if bold:
+        candidates.extend(
+            [
+                "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+                "/Library/Fonts/Arial Bold.ttf",
+            ]
+        )
+    candidates.extend(
+        [
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+        ]
+    )
+    for candidate in candidates:
+        if Path(candidate).exists():
+            return ImageFont.truetype(candidate, size)
+    return ImageFont.load_default()
+
+
+def fit_export_text(draw: ImageDraw.ImageDraw, text_value: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_width: int) -> str:
+    if draw.textlength(text_value, font=font) <= max_width:
+        return text_value
+    if draw.textlength("..", font=font) > max_width:
+        return ""
+    result = text_value
+    while result and draw.textlength(result + "..", font=font) > max_width:
+        result = result[:-1]
+    return result + ".." if result else ""
+
+
+def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
+    short_labels = {
+        "Gear Servicing": "Service",
+        "Compressor": "Comp",
+        "Specialtrips": "Special",
+    }
+    category_colors = {
+        "Gear": "#bae6fd",
+        "Gear Servicing": "#bbf7d0",
+        "Car/Boat": "#fecaca",
+        "Trips": "#fed7aa",
+        "Social": "#ddd6fe",
+        "Courses": "#f5d0fe",
+        "Compressor": "#99f6e4",
+        "Specialtrips": "#fde68a",
+    }
+    total_budget = sum(float(row["annual_budget"]) for row in rows)
+    total_current = sum(float(row["current_ytd"]) for row in rows)
+    total_ytd_budget = sum(float(row.get("ytd_budget") or 0) for row in rows)
+    total_percent = (total_current / total_budget * 100) if total_budget > 0 else 0.0
+    total_ytd_percent = (total_current / total_ytd_budget * 100) if total_ytd_budget > 0 else 0.0
+    draw_rows = [
+        {
+            "label": "Total",
+            "annual_budget": total_budget,
+            "current_ytd": total_current,
+            "percent_used": total_percent,
+            "ytd_percent": total_ytd_percent,
+            "special_total": True,
+        },
+        *rows,
+    ]
+
+    scale = 2
+    pad = 5 * scale
+    label_w = 76 * scale
+    bar_w = 195 * scale
+    bar_h = 15 * scale
+    row_h = 22 * scale
+    top_marker_h = 24 * scale
+    axis_h = 24 * scale
+    right_w = 49 * scale
+    width = pad * 2 + label_w + bar_w + right_w
+    height = pad * 2 + top_marker_h + row_h * len(draw_rows) + axis_h
+
+    bg = "#f8fafc"
+    track = "#eef2f7"
+    track_edge = "#cbd5e1"
+    pace = "#93c5fd"
+    axis = "#64748b"
+    text = "#111827"
+    muted = "#64748b"
+    white = "#ffffff"
+    over_highlight = "#f472b6"
+    ytd_red = "#ef4444"
+
+    label_font = budget_export_font(13 * scale, bold=True)
+    inside_font = budget_export_font(9 * scale, bold=True)
+    pct_font = budget_export_font(10 * scale, bold=True)
+    axis_font = budget_export_font(9 * scale, bold=True)
+    date_font = budget_export_font(8 * scale, bold=True)
+
+    max_percent = max(
+        [float(row["percent_used"]) for row in draw_rows if float(row.get("annual_budget") or 0) > 0]
+        + [100.0]
+    )
+    graph_max = max(100, math.ceil(max_percent / 25.0) * 25)
+    show_over_limit = max_percent > 100
+
+    image = Image.new("RGB", (width, height), bg)
+    draw = ImageDraw.Draw(image)
+    bx = pad + label_w
+    today = date.today()
+    pace_percent = float(rows[0]["ytd_budget_percent"]) if rows else 0.0
+    pace_x = bx + int(min(pace_percent, graph_max) / graph_max * bar_w)
+    marker_base_y = pad + 15 * scale
+    tri_w = 14 * scale
+    tri_h = 12 * scale
+    draw.polygon(
+        [
+            (pace_x, marker_base_y + tri_h),
+            (pace_x - tri_w // 2, marker_base_y),
+            (pace_x + tri_w // 2, marker_base_y),
+        ],
+        fill=pace,
+    )
+    draw.text(
+        (pace_x, marker_base_y - 2 * scale),
+        today.strftime("%d %b"),
+        font=date_font,
+        fill="#6b8ed6",
+        anchor="ms",
+    )
+
+    def draw_total_stack(x: int, y: int, fill_width: int, radius: int) -> None:
+        if fill_width <= 0:
+            return
+        layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        layer_draw = ImageDraw.Draw(layer)
+        cursor = x
+        used_width = 0
+        for row in rows:
+            part = float(row["current_ytd"])
+            if total_budget <= 0 or part <= 0:
+                continue
+            segment_width = int(part / total_budget * bar_w)
+            segment_width = max(segment_width, 1) if used_width + segment_width <= fill_width else max(0, fill_width - used_width)
+            if segment_width <= 0:
+                continue
+            layer_draw.rectangle(
+                (cursor, y, cursor + segment_width, y + bar_h),
+                fill=category_colors.get(str(row["label"]), "#cbd5e1"),
+            )
+            cursor += segment_width
+            used_width += segment_width
+            if used_width >= fill_width:
+                break
+        mask = Image.new("L", image.size, 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.rounded_rectangle((x, y, x + fill_width, y + bar_h), radius=radius, fill=255)
+        image.paste(layer, (0, 0), mask)
+
+    radius = 6 * scale
+    last_bar_bottom = 0
+    for index, row in enumerate(draw_rows):
+        y = pad + top_marker_h + index * row_h
+        cy = y + row_h // 2
+        by = cy - bar_h // 2
+        is_total = bool(row.get("special_total"))
+        annual = float(row["annual_budget"])
+        current = float(row["current_ytd"])
+        percent_used = float(row["percent_used"]) if annual > 0 else 0.0
+        ytd_percent = float(row.get("ytd_percent") or 0)
+        ytd_exceeded = ytd_percent > 100
+        budget_exceeded = annual > 0 and current > annual
+        label = short_labels.get(str(row["label"]), str(row["label"]))
+
+        draw.text(
+            (pad, cy),
+            label,
+            font=label_font,
+            fill=ytd_red if ytd_exceeded and not is_total else text,
+            anchor="lm",
+        )
+        draw.rounded_rectangle(
+            (bx, by, bx + bar_w, by + bar_h),
+            radius=radius,
+            fill=track,
+            outline=track_edge,
+            width=1 * scale,
+        )
+        fill_w = int(min(percent_used, 100) / graph_max * bar_w) if graph_max else 0
+        if is_total:
+            draw_total_stack(bx, by, fill_w, radius)
+            draw = ImageDraw.Draw(image)
+            draw.rounded_rectangle(
+                (bx, by, bx + bar_w, by + bar_h),
+                radius=radius,
+                outline=track_edge,
+                width=1 * scale,
+            )
+        else:
+            fill = category_colors.get(str(row["label"]), "#cbd5e1") if annual > 0 else "#dbe4ef"
+            if fill_w > 0:
+                draw.rounded_rectangle((bx, by, bx + fill_w, by + bar_h), radius=radius, fill=fill)
+                if fill_w < radius:
+                    draw.rectangle((bx + fill_w // 2, by, bx + fill_w, by + bar_h), fill=fill)
+
+        if percent_used > 100:
+            start = bx + int(100 / graph_max * bar_w)
+            end = bx + int(min(percent_used, graph_max) / graph_max * bar_w)
+            if end > start:
+                draw.rectangle((start, by, end, by + bar_h), fill=over_highlight)
+                for stripe_x in range(start - bar_h, end + bar_h, 7 * scale):
+                    draw.line((stripe_x, by + bar_h, stripe_x + bar_h, by), fill=white, width=1 * scale)
+        if show_over_limit:
+            limit_x = bx + int(100 / graph_max * bar_w)
+            draw.line((limit_x, by - scale, limit_x, by + bar_h + scale), fill="#94a3b8", width=scale)
+
+        value_text = fit_export_text(
+            draw,
+            f"{compact_currency(current)} / {compact_currency(annual)}",
+            inside_font,
+            bar_w - 9 * scale,
+        )
+        value_color = white if budget_exceeded else text
+        if budget_exceeded and draw.textlength(value_text, font=inside_font) + 10 * scale > fill_w:
+            value_color = over_highlight
+        draw.text((bx + 5 * scale, cy), value_text, font=inside_font, fill=value_color, anchor="lm")
+        pct_color = "#7c3aed" if is_total else (ytd_red if ytd_exceeded else muted)
+        draw.text((bx + bar_w + 6 * scale, cy), f"{percent_used:.0f}%", font=pct_font, fill=pct_color, anchor="lm")
+        last_bar_bottom = by + bar_h
+
+    axis_y = last_bar_bottom + 8 * scale
+    axis_ticks = [0, 25, 50, 75, 100]
+    if graph_max > 100:
+        axis_ticks.append(graph_max)
+    for tick in axis_ticks:
+        tx = bx + int(tick / graph_max * bar_w)
+        draw.line((tx, axis_y - 2 * scale, tx, axis_y), fill=axis, width=1 * scale)
+        draw.text((tx, axis_y + 2 * scale), f"{tick:.0f}%", font=axis_font, fill=axis, anchor="ma")
+
+    background = Image.new("RGB", (1, 1), bg).getpixel((0, 0))
+    pixels = image.load()
+    min_x, min_y, max_x, max_y = width, height, 0, 0
+    for yy in range(height):
+        for xx in range(width):
+            if pixels[xx, yy] != background:
+                min_x = min(min_x, xx)
+                min_y = min(min_y, yy)
+                max_x = max(max_x, xx)
+                max_y = max(max_y, yy)
+    if max_x > min_x and max_y > min_y:
+        crop_pad = 2 * scale
+        image = image.crop(
+            (
+                max(0, min_x - crop_pad),
+                max(0, min_y - crop_pad),
+                min(width, max_x + crop_pad + 1),
+                min(height, max_y + crop_pad + 1),
+            )
+        )
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
 
 
 def filter_source_upload_columns(source_key: str, frame: pd.DataFrame) -> pd.DataFrame:
@@ -1956,6 +2225,22 @@ def budget_page(request: Request, message: Optional[str] = Query(None)) -> HTMLR
     if auth_redirect:
         return auth_redirect
     return templates.TemplateResponse("budget.html", budget_context(request, message))
+
+
+@app.get("/budget/export.png")
+def export_budget_chart(request: Request) -> StreamingResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    bundle, _missing_sources = load_bundle_safe(request)
+    rows = budget_summary_rows(bundle, request)
+    png_bytes = render_budget_export_png(rows)
+    filename = f"budget-summary-{date.today().isoformat()}.png"
+    return StreamingResponse(
+        io.BytesIO(png_bytes),
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/budget/save")
