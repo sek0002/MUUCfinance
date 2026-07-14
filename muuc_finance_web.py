@@ -114,6 +114,11 @@ LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 DEFAULT_DASHBOARD_END = date.today()
 DEFAULT_DASHBOARD_START = DEFAULT_DASHBOARD_END - timedelta(days=365)
 BUDGET_TARGET_FACTOR = 0.90
+CAR_BOAT_CATEGORY = "car/boat"
+CAR_BOAT_SPLIT_COLORS = {
+    "Car": "#fecaca",
+    "Boat": "#c7d2fe",
+}
 BUDGET_CATEGORIES = [
     {"label": "Gear", "category": "gear"},
     {"label": "Gear Servicing", "category": "gear servicing"},
@@ -430,6 +435,55 @@ def category_total_for_period(expenses: pd.DataFrame, category_key: str, start: 
     return float(filtered["amount"].sum())
 
 
+def car_boat_split_label(row: pd.Series) -> str:
+    subgroup = str(row.get("subgroup", "") or "").lower()
+    description = str(row.get("description", "") or "").lower()
+    if "boat" in subgroup or "boat" in description or subgroup == "regal":
+        return "Boat"
+    return "Car"
+
+
+def car_boat_totals_for_period(expenses: pd.DataFrame, start: date, end: date) -> dict[str, float]:
+    frame = matching_budget_expenses(expenses, CAR_BOAT_CATEGORY)
+    if frame.empty:
+        return {"Car": 0.0, "Boat": 0.0}
+    filtered = filter_frame(frame, start, end)
+    if filtered.empty:
+        return {"Car": 0.0, "Boat": 0.0}
+    totals = {"Car": 0.0, "Boat": 0.0}
+    for _, row in filtered.iterrows():
+        totals[car_boat_split_label(row)] += float(row.get("amount", 0.0) or 0.0)
+    return totals
+
+
+def budget_split_segments(
+    split_totals: dict[str, float],
+    denominator: float,
+    scale_factor: float = 1.0,
+) -> list[dict[str, Any]]:
+    if denominator <= 0:
+        return []
+    left = 0.0
+    segments: list[dict[str, Any]] = []
+    for label in ("Car", "Boat"):
+        amount = float(split_totals.get(label, 0.0)) * scale_factor
+        if amount <= 0:
+            continue
+        width = (amount / denominator) * 100
+        segments.append(
+            {
+                "label": label,
+                "amount": amount,
+                "amount_label": currency(amount),
+                "left": left,
+                "width": width,
+                "color": CAR_BOAT_SPLIT_COLORS[label],
+            }
+        )
+        left += width
+    return segments
+
+
 def same_month_day(year: int, anchor: date) -> date:
     try:
         return date(year, anchor.month, anchor.day)
@@ -466,6 +520,19 @@ def budget_summary_rows(bundle: AnalysisBundle, request: Optional[Request] = Non
         previous_percent_used = 0.0 if annual_budget <= 0 else (previous_ytd_equivalent / annual_budget) * 100
         ytd_budget_percent = BUDGET_TARGET_FACTOR * ytd_ratio * 100
         ytd_percent = 0.0 if ytd_budget <= 0 else (current_ytd / ytd_budget) * 100
+        current_split_segments: list[dict[str, Any]] = []
+        previous_split_segments: list[dict[str, Any]] = []
+        split_summary = ""
+        if category_key == CAR_BOAT_CATEGORY:
+            current_split = car_boat_totals_for_period(bundle.expenses, date(current_year, 1, 1), today)
+            previous_split = car_boat_totals_for_period(bundle.expenses, date(previous_year, 1, 1), previous_ytd_end)
+            previous_scale = 0.0 if previous_full <= 0 else annual_budget / previous_full
+            current_split_segments = budget_split_segments(current_split, annual_budget)
+            previous_split_segments = budget_split_segments(previous_split, annual_budget, previous_scale)
+            split_summary = " · ".join(
+                f"{segment['label']} {segment['amount_label']}"
+                for segment in current_split_segments
+            )
         rows.append(
             {
                 "label": label,
@@ -494,6 +561,9 @@ def budget_summary_rows(bundle: AnalysisBundle, request: Optional[Request] = Non
                 "ytd_budget_percent_label": f"{ytd_budget_percent:.1f}%",
                 "ytd_percent": ytd_percent,
                 "ytd_percent_label": f"{ytd_percent:.1f}%",
+                "current_split_segments": current_split_segments,
+                "previous_split_segments": previous_split_segments,
+                "split_summary": split_summary,
                 "status": "Over YTD" if current_ytd > ytd_budget and ytd_budget > 0 else "On Track",
             }
         )
@@ -661,6 +731,8 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         "Gear": "#bae6fd",
         "Gear Servicing": "#bbf7d0",
         "Car/Boat": "#fecaca",
+        "Car": CAR_BOAT_SPLIT_COLORS["Car"],
+        "Boat": CAR_BOAT_SPLIT_COLORS["Boat"],
         "Trips": "#fed7aa",
         "Social": "#ddd6fe",
         "Courses": "#f5d0fe",
@@ -754,21 +826,51 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         cursor = x
         used_width = 0
         for row in rows:
-            part = float(row["current_ytd"])
-            if total_budget <= 0 or part <= 0:
-                continue
-            segment_width = int(part / total_budget * bar_w)
-            segment_width = max(segment_width, 1) if used_width + segment_width <= fill_width else max(0, fill_width - used_width)
+            total_parts = row.get("current_split_segments") or [
+                {
+                    "label": str(row["label"]),
+                    "amount": float(row["current_ytd"]),
+                    "color": category_colors.get(str(row["label"]), "#cbd5e1"),
+                }
+            ]
+            for part_row in total_parts:
+                part = float(part_row.get("amount", 0.0) or 0.0)
+                if total_budget <= 0 or part <= 0:
+                    continue
+                segment_width = int(part / total_budget * bar_w)
+                segment_width = max(segment_width, 1) if used_width + segment_width <= fill_width else max(0, fill_width - used_width)
+                if segment_width <= 0:
+                    continue
+                layer_draw.rectangle(
+                    (cursor, y, cursor + segment_width, y + bar_h),
+                    fill=str(part_row.get("color") or category_colors.get(str(part_row.get("label")), "#cbd5e1")),
+                )
+                cursor += segment_width
+                used_width += segment_width
+                if used_width >= fill_width:
+                    break
+            if used_width >= fill_width:
+                break
+        mask = Image.new("L", image.size, 0)
+        mask_draw = ImageDraw.Draw(mask)
+        export_rounded_rectangle(mask_draw, (x, y, x + fill_width, y + bar_h), radius=radius, fill=255)
+        image.paste(layer, (0, 0), mask)
+
+    def draw_split_stack(row: dict[str, Any], x: int, y: int, fill_width: int, radius: int) -> None:
+        segments = row.get("current_split_segments") or []
+        if fill_width <= 0 or not segments:
+            return
+        layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        layer_draw = ImageDraw.Draw(layer)
+        for segment in segments:
+            segment_left = x + int(float(segment["left"]) / graph_max * bar_w)
+            segment_width = int(float(segment["width"]) / graph_max * bar_w)
             if segment_width <= 0:
                 continue
             layer_draw.rectangle(
-                (cursor, y, cursor + segment_width, y + bar_h),
-                fill=category_colors.get(str(row["label"]), "#cbd5e1"),
+                (segment_left, y, segment_left + segment_width, y + bar_h),
+                fill=str(segment.get("color") or category_colors.get(str(segment.get("label")), "#cbd5e1")),
             )
-            cursor += segment_width
-            used_width += segment_width
-            if used_width >= fill_width:
-                break
         mask = Image.new("L", image.size, 0)
         mask_draw = ImageDraw.Draw(mask)
         export_rounded_rectangle(mask_draw, (x, y, x + fill_width, y + bar_h), radius=radius, fill=255)
@@ -816,6 +918,9 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
                 outline=track_edge,
                 width=1 * scale,
             )
+        elif row.get("current_split_segments"):
+            draw_split_stack(row, bx, by, fill_w, radius)
+            draw = ImageDraw.Draw(image)
         else:
             fill = category_colors.get(str(row["label"]), "#cbd5e1") if annual > 0 else "#dbe4ef"
             if fill_w > 0:
@@ -2186,6 +2291,10 @@ def budget_context(request: Request, message: Optional[str]) -> dict[str, Any]:
         row["budget_marker"] = min((100.0 / graph_max_percent) * 100, 100)
         row["ytd_marker"] = min((float(row["ytd_budget_percent"]) / graph_max_percent) * 100, 100)
         row["is_over_ytd"] = float(row["current_ytd"]) > float(row["ytd_budget"]) and float(row["ytd_budget"]) > 0
+        for segment_key in ("current_split_segments", "previous_split_segments"):
+            for segment in row.get(segment_key, []):
+                segment["left_percent"] = min((float(segment["left"]) / graph_max_percent) * 100, 100)
+                segment["width_percent"] = min((float(segment["width"]) / graph_max_percent) * 100, 100)
     today = date.today()
     previous_ytd_end = same_month_day(today.year - 1, today)
     return {

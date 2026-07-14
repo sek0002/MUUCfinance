@@ -484,6 +484,30 @@ code, textarea, input, select, button { font: inherit; }
   border-radius: inherit;
 }
 
+.budget-bar-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+}
+
+.budget-bar-segment.first {
+  border-radius: 999px 0 0 999px;
+}
+
+.budget-bar-segment.last {
+  border-radius: 0 999px 999px 0;
+}
+
+.budget-bar-segment.first.last {
+  border-radius: 999px;
+}
+
+.budget-bar-segment.current,
+.budget-bar-segment.previous {
+  box-shadow: inset -1px 0 color-mix(in srgb, var(--panel) 60%, transparent 40%);
+}
+
 .budget-marker {
   position: absolute;
   top: -7px;

@@ -77,7 +77,10 @@
         <div class="budget-row-head">
           <div>
             <h3>{{ row.label }}</h3>
-            <p>{{ row.status }} · {{ row.percent_used_label }} of annual budget · {{ row.ytd_percent_label }} of YTD target</p>
+            <p>
+              {{ row.status }} · {{ row.percent_used_label }} of annual budget · {{ row.ytd_percent_label }} of YTD target
+              {% if row.split_summary %} · {{ row.split_summary }}{% endif %}
+            </p>
           </div>
           <label>
             <span>Annual budget</span>
@@ -98,7 +101,13 @@
           <div class="budget-track">
             <span class="budget-marker budget" style="left: {{ row.budget_marker }}%"></span>
             <span class="budget-marker pace" style="left: {{ row.ytd_marker }}%"></span>
+            {% if row.current_split_segments %}
+            {% for segment in row.current_split_segments %}
+            <span class="budget-bar-segment current{% if loop.first %} first{% endif %}{% if loop.last %} last{% endif %}" style="left: {{ segment.left_percent }}%; width: {{ segment.width_percent }}%; background: {{ segment.color }}" title="{{ segment.label }} {{ segment.amount_label }}"></span>
+            {% endfor %}
+            {% else %}
             <span class="budget-bar current{% if row.is_over_ytd %} over{% endif %}" style="width: {{ row.current_width }}%"></span>
+            {% endif %}
             <span class="budget-bar-label{% if row.is_over_ytd %} over{% else %} under{% endif %}" style="left: {{ row.current_label_left }}%">
               {{ row.current_ytd_label }} · {{ row.percent_used_label }}
             </span>
@@ -106,7 +115,13 @@
           <div class="budget-track">
             <span class="budget-marker budget" style="left: {{ row.budget_marker }}%"></span>
             <span class="budget-marker pace" style="left: {{ row.ytd_marker }}%"></span>
+            {% if row.previous_split_segments %}
+            {% for segment in row.previous_split_segments %}
+            <span class="budget-bar-segment previous{% if loop.first %} first{% endif %}{% if loop.last %} last{% endif %}" style="left: {{ segment.left_percent }}%; width: {{ segment.width_percent }}%; background: {{ segment.color }}" title="{{ previous_year }} {{ segment.label }} {{ segment.amount_label }}"></span>
+            {% endfor %}
+            {% else %}
             <span class="budget-bar previous" style="width: {{ row.previous_width }}%"></span>
+            {% endif %}
             <span class="budget-bar-label previous" style="left: {{ row.previous_label_left }}%">
               {{ row.previous_ytd_equivalent_label }} · {{ row.previous_percent_used_label }}
             </span>
