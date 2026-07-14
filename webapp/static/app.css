@@ -515,12 +515,16 @@ code, textarea, input, select, button { font: inherit; }
   min-width: 0;
   padding: 0 8px;
   overflow: hidden;
-  color: var(--text);
+  color: #000;
   font-size: 0.72rem;
   font-weight: 750;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.budget-bar-label.split-total {
+  color: #000;
 }
 
 .budget-marker {
