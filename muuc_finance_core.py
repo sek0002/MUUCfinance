@@ -52,7 +52,8 @@ INCOME_CATEGORIES = [
 EXPENSE_CATEGORIES = [
     "fees",
     "air",
-    "car/boat",
+    "car",
+    "boat",
     "compressor",
     "courses",
     "gear",
@@ -76,6 +77,8 @@ CATEGORY_COLORS = {
     "misc": "#9d755d",
     "fees": "#bab0ab",
     "car/boat": "#5f8dd3",
+    "car": "#f0a6a6",
+    "boat": "#9fb0f2",
     "compressor": "#7a9e9f",
     "gear": "#89a54e",
     "gear servicing": "#4f7f6f",

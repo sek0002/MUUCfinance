@@ -422,7 +422,10 @@ def save_budget_settings(request: Optional[Request], annual_budgets: dict[str, f
 def matching_budget_expenses(expenses: pd.DataFrame, category_key: str) -> pd.DataFrame:
     if expenses.empty or "category" not in expenses.columns:
         return expenses.iloc[0:0].copy()
-    return expenses[expenses["category"].fillna("").astype(str).str.lower() == category_key].copy()
+    category_series = expenses["category"].fillna("").astype(str).str.lower()
+    if category_key == CAR_BOAT_CATEGORY:
+        return expenses[category_series.isin([CAR_BOAT_CATEGORY, "car", "boat"])].copy()
+    return expenses[category_series == category_key].copy()
 
 
 def category_total_for_period(expenses: pd.DataFrame, category_key: str, start: date, end: date) -> float:
@@ -436,6 +439,11 @@ def category_total_for_period(expenses: pd.DataFrame, category_key: str, start: 
 
 
 def car_boat_split_label(row: pd.Series) -> str:
+    category = str(row.get("category", "") or "").lower()
+    if category == "car":
+        return "Car"
+    if category == "boat":
+        return "Boat"
     subgroup = str(row.get("subgroup", "") or "").lower()
     description = str(row.get("description", "") or "").lower()
     if "boat" in subgroup or "boat" in description or subgroup == "regal":

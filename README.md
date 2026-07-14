@@ -10,7 +10,7 @@ Desktop app for categorising MUUC Stripe income and MUUC everyday-account expens
 - Loads the fixed source CSV inputs from `source/stripe.csv` and `source/everyday.csv`.
 - Removes file-upload controls; the app always reads the bundled `source/` files.
 - Breaks Stripe income into the requested categories: `air`, `courses`, `gear hire`, `memberships`, `social`, `trips`, `specialtrips`, `misc`.
-- Breaks expenses into the requested categories: `fees`, `air`, `car/boat`, `compressor`, `courses`, `gear`, `refunds`, `social`, `specialtrips`, `trips`, `misc`.
+- Breaks expenses into the requested categories: `fees`, `air`, `car`, `boat`, `compressor`, `courses`, `gear`, `refunds`, `social`, `specialtrips`, `trips`, `misc`.
 - Uses editable regex rule tables stored as CSV files with categories as columns.
 - On first run, copies the bundled rule tables into `~/.muuc_finance_analyzer/config/` so packaged apps keep using your saved rule changes.
 - Pushes unmatched rows into `misc` so they can be reviewed and reclassified by editing the rule tables.
