@@ -577,6 +577,7 @@ def budget_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
     ytd_budget = sum(float(row["ytd_budget"]) for row in rows)
     percent_used = 0.0 if annual_budget <= 0 else (current_ytd / annual_budget) * 100
     previous_percent_used = 0.0 if annual_budget <= 0 else (previous_ytd / annual_budget) * 100
+    ytd_percent = 0.0 if ytd_budget <= 0 else (current_ytd / ytd_budget) * 100
     return {
         "annual_budget": currency(annual_budget),
         "current_ytd": currency(current_ytd),
@@ -585,7 +586,8 @@ def budget_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "remaining_ytd": currency(ytd_budget - current_ytd),
         "percent_used": f"{percent_used:.1f}%",
         "previous_percent_used": f"{previous_percent_used:.1f}%",
-        "ytd_percent": "0.0%" if ytd_budget <= 0 else f"{(current_ytd / ytd_budget) * 100:.1f}%",
+        "ytd_percent": f"{ytd_percent:.1f}%",
+        "is_over_ytd": current_ytd > ytd_budget and ytd_budget > 0,
     }
 
 
@@ -949,7 +951,7 @@ def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
         if budget_exceeded and export_text_size(draw, value_text, inside_font)[0] + 10 * scale > fill_w:
             value_color = over_highlight
         export_draw_text(draw, (bx + 5 * scale, cy), value_text, font=inside_font, fill=value_color, anchor="lm")
-        pct_color = "#7c3aed" if is_total else (ytd_red if ytd_exceeded else muted)
+        pct_color = ytd_red if ytd_exceeded else muted
         export_draw_text(draw, (bx + bar_w + 6 * scale, cy), f"{percent_used:.0f}%", font=pct_font, fill=pct_color, anchor="lm")
         last_bar_bottom = by + bar_h
 

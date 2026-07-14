@@ -330,6 +330,14 @@ code, textarea, input, select, button { font: inherit; }
   padding-bottom: 2px;
 }
 
+.budget-readout strong.under {
+  color: var(--success);
+}
+
+.budget-readout strong.over {
+  color: var(--danger);
+}
+
 .budget-readout span,
 .budget-readout small {
   color: var(--muted);

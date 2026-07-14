@@ -45,7 +45,7 @@
         <div class="muted">{{ current_ytd_end }} vs {{ previous_ytd_end }}</div>
       </div>
       <div class="budget-readout">
-        <strong>{{ budget_totals.ytd_percent }}</strong>
+        <strong class="{% if budget_totals.is_over_ytd %}over{% else %}under{% endif %}">{{ budget_totals.ytd_percent }}</strong>
         <span>of YTD budget used</span>
         <small>Remaining against YTD budget: {{ budget_totals.remaining_ytd }}</small>
       </div>
