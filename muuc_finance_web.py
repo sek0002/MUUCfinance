@@ -269,9 +269,6 @@ def current_rule_paths(request: Optional[Request] = None) -> tuple[Path, Path]:
 
 
 def current_budget_settings_path(request: Optional[Request] = None) -> Path:
-    if request is not None and is_demo_session(request):
-        root = ensure_demo_session(request) / "config"
-        return root / BUDGET_SETTINGS_FILENAME
     WEB_RULES_DIR.mkdir(parents=True, exist_ok=True)
     return WEB_RULES_DIR / BUDGET_SETTINGS_FILENAME
 
@@ -1966,6 +1963,8 @@ async def save_budget_page(request: Request) -> RedirectResponse:
     auth_redirect = require_auth(request)
     if auth_redirect:
         return auth_redirect
+    if is_demo_session(request):
+        return RedirectResponse(url="/budget?message=Sandbox+mode+uses+the+current+admin+budget.", status_code=303)
     form = await request.form()
     annual_budgets = {
         item["label"]: parse_budget_amount(form.get(f"budget_{item['category']}", "0"))
