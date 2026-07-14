@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="budget-shell">
+  {% if show_upload_prompt %}
+  <section class="banner warning compact-banner">
+    Missing source CSVs: {{ missing_sources | join(", ") }}. Use File Upload to add them.
+  </section>
+  {% endif %}
+
+  <section class="budget-top-grid">
+    <article class="panel budget-summary-panel">
+      <div class="panel-head tight">
+        <h2>{{ current_year }} Budget</h2>
+        <div class="muted">Compared with {{ previous_year }} year to date</div>
+      </div>
+      <div class="budget-summary-grid">
+        <div class="summary-item">
+          <span>Annual Budget</span>
+          <strong>{{ budget_totals.annual_budget }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>{{ current_year }} YTD</span>
+          <strong class="summary-value expense-value">{{ budget_totals.current_ytd }}</strong>
+          <small>{{ budget_totals.percent_used }} of budget</small>
+        </div>
+        <div class="summary-item">
+          <span>{{ previous_year }} YTD Equivalent</span>
+          <strong>{{ budget_totals.previous_ytd }}</strong>
+          <small>{{ budget_totals.previous_percent_used }} of budget</small>
+        </div>
+        <div class="summary-item">
+          <span>90% Pace YTD Budget</span>
+          <strong>{{ budget_totals.ytd_budget }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel budget-summary-panel">
+      <div class="panel-head tight">
+        <h2>Live Readout</h2>
+        <div class="muted">{{ current_ytd_end }} vs {{ previous_ytd_end }}</div>
+      </div>
+      <div class="budget-readout">
+        <strong>{{ budget_totals.ytd_percent }}</strong>
+        <span>of YTD budget used</span>
+        <small>Remaining against YTD budget: {{ budget_totals.remaining_ytd }}</small>
+      </div>
+    </article>
+  </section>
+
+  <form method="post" action="/budget/save" class="panel budget-panel">
+    <div class="panel-head tight">
+      <h2>Category Budgets</h2>
+      <div class="actions">
+        <button type="submit">Save Budgets</button>
+      </div>
+    </div>
+
+    <div class="budget-legend" aria-label="Budget chart legend">
+      <span><i class="legend-swatch current"></i>{{ current_year }} YTD</span>
+      <span><i class="legend-swatch previous"></i>{{ previous_year }} YTD normalized</span>
+      <span><i class="legend-marker budget"></i>100% budget</span>
+      <span><i class="legend-marker pace"></i>90% pace YTD budget</span>
+    </div>
+
+    <div class="budget-diagram-list">
+      {% for row in budget_rows %}
+      <article class="budget-row-card{% if row.is_over_ytd %} over-budget{% endif %}">
+        <div class="budget-row-head">
+          <div>
+            <h3>{{ row.label }}</h3>
+            <p>{{ row.status }} · {{ row.percent_used_label }} of annual budget · {{ row.ytd_percent_label }} of YTD target</p>
+          </div>
+          <label>
+            <span>Annual budget</span>
+            <input type="number" step="0.01" min="0" name="budget_{{ row.category }}" value="{{ row.annual_budget_input }}">
+          </label>
+        </div>
+
+        <div class="budget-bars" aria-label="{{ row.label }} budget comparison">
+          <div class="budget-axis">
+            {% for tick in axis_ticks %}
+            <span style="left: {{ tick.left }}%">{{ tick.label }}</span>
+            {% endfor %}
+          </div>
+          <div class="budget-track">
+            <span class="budget-marker budget" style="left: {{ row.budget_marker }}%"></span>
+            <span class="budget-marker pace" style="left: {{ row.ytd_marker }}%"></span>
+            <span class="budget-bar current{% if row.is_over_ytd %} over{% endif %}" style="width: {{ row.current_width }}%"></span>
+            <span class="budget-bar-label{% if row.is_over_ytd %} over{% else %} under{% endif %}" style="left: {{ row.current_label_left }}%">
+              {{ row.current_ytd_label }} · {{ row.percent_used_label }}
+            </span>
+          </div>
+          <div class="budget-track">
+            <span class="budget-marker budget" style="left: {{ row.budget_marker }}%"></span>
+            <span class="budget-marker pace" style="left: {{ row.ytd_marker }}%"></span>
+            <span class="budget-bar previous" style="width: {{ row.previous_width }}%"></span>
+            <span class="budget-bar-label previous" style="left: {{ row.previous_label_left }}%">
+              {{ row.previous_ytd_equivalent_label }} · {{ row.previous_percent_used_label }}
+            </span>
+          </div>
+        </div>
+
+        <div class="budget-row-values">
+          <span>Budget {{ row.annual_budget_label }}</span>
+          <span>{{ current_year }} YTD {{ row.current_ytd_label }}</span>
+          <span>{{ previous_year }} equivalent {{ row.previous_ytd_equivalent_label }}</span>
+          <span>90% pace target {{ row.ytd_budget_label }}</span>
+          <span>Last full year {{ row.previous_full_label }}</span>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </form>
+
+  <section class="panel">
+    <div class="panel-head tight">
+      <h2>Budget Table</h2>
+    </div>
+    <div class="table-wrap compact-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Annual Budget</th>
+            <th>{{ current_year }} YTD Spend</th>
+            <th>{{ current_year }} Budget %</th>
+            <th>{{ previous_year }} YTD Equivalent</th>
+            <th>90% Pace YTD Budget</th>
+            <th>Remaining YTD</th>
+            <th>Last Full Year</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in budget_rows %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="amount">{{ row.annual_budget_label }}</td>
+            <td class="amount">{{ row.current_ytd_label }}</td>
+            <td class="amount">{{ row.percent_used_label }}</td>
+            <td class="amount">{{ row.previous_ytd_equivalent_label }}</td>
+            <td class="amount">{{ row.ytd_budget_label }}</td>
+            <td class="amount">{{ row.remaining_ytd_label }}</td>
+            <td class="amount">{{ row.previous_full_label }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

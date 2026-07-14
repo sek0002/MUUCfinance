@@ -43,6 +43,7 @@
             <div class="menu-label">Sandbox Mode</div>
             {% endif %}
             <a class="menu-link{% if active_page == 'dashboard' %} active{% endif %}" href="/dashboard">Dashboard</a>
+            <a class="menu-link{% if active_page == 'budget' %} active{% endif %}" href="/budget">Budget</a>
             <a class="menu-link{% if active_page == 'rules' %} active{% endif %}" href="/rules">Rules</a>
             {% if not is_demo_session %}
             <a class="menu-link{% if active_page == 'files' %} active{% endif %}" href="/files">File Upload</a>

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import hmac
 import html
 import io
+import json
+import math
 import os
 import re
 import shutil
@@ -88,6 +91,7 @@ WEB_DATA_DIR = Path(os.getenv("MUUC_WEB_DATA_DIR", str(SETTINGS_DIR / "web")))
 WEB_SOURCE_DIR = WEB_DATA_DIR / "source"
 WEB_RULES_DIR = WEB_DATA_DIR / "config"
 WEB_SESSION_DIR = WEB_DATA_DIR / "sessions"
+BUDGET_SETTINGS_FILENAME = "budget_settings.json"
 PERIOD_OPTIONS = [
     "All Dates",
     "Custom",
@@ -107,6 +111,17 @@ LOGIN_RATE_LIMIT_WINDOW_SECONDS = env_int("MUUC_LOGIN_RATE_LIMIT_WINDOW_SECONDS"
 LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 DEFAULT_DASHBOARD_END = date.today()
 DEFAULT_DASHBOARD_START = DEFAULT_DASHBOARD_END - timedelta(days=365)
+BUDGET_TARGET_FACTOR = 0.90
+BUDGET_CATEGORIES = [
+    {"label": "Gear", "category": "gear"},
+    {"label": "Gear Servicing", "category": "gear servicing"},
+    {"label": "Car/Boat", "category": "car/boat"},
+    {"label": "Trips", "category": "trips"},
+    {"label": "Social", "category": "social"},
+    {"label": "Courses", "category": "courses"},
+    {"label": "Compressor", "category": "compressor"},
+    {"label": "Specialtrips", "category": "specialtrips"},
+]
 
 app = FastAPI(title=f"{APP_NAME} Web")
 app.add_middleware(
@@ -122,6 +137,7 @@ SERVICE_WORKER_PATH = STATIC_DIR / "sw.js"
 ASSET_VERSION_PATHS = [
     TEMPLATES_DIR / "base.html",
     TEMPLATES_DIR / "dashboard.html",
+    TEMPLATES_DIR / "budget.html",
     TEMPLATES_DIR / "files.html",
     TEMPLATES_DIR / "rules.html",
     TEMPLATES_DIR / "login.html",
@@ -252,6 +268,14 @@ def current_rule_paths(request: Optional[Request] = None) -> tuple[Path, Path]:
     return ensure_web_rule_file("income_rules.csv"), ensure_web_rule_file("expense_rules.csv")
 
 
+def current_budget_settings_path(request: Optional[Request] = None) -> Path:
+    if request is not None and is_demo_session(request):
+        root = ensure_demo_session(request) / "config"
+        return root / BUDGET_SETTINGS_FILENAME
+    WEB_RULES_DIR.mkdir(parents=True, exist_ok=True)
+    return WEB_RULES_DIR / BUDGET_SETTINGS_FILENAME
+
+
 def source_backup_root(request: Optional[Request] = None) -> Path:
     if request is not None and is_demo_session(request):
         return ensure_demo_session(request) / "source" / ".backups"
@@ -355,6 +379,145 @@ def load_bundle_safe(request: Optional[Request] = None) -> tuple[AnalysisBundle,
         return load_bundle(request), []
     except FileNotFoundError:
         return empty_bundle(), missing_source_keys(request)
+
+
+def parse_budget_amount(value: Any) -> float:
+    text = str(value or "").strip().replace("$", "").replace(",", "")
+    if not text:
+        return 0.0
+    try:
+        return max(float(text), 0.0)
+    except ValueError:
+        return 0.0
+
+
+def load_budget_settings(request: Optional[Request] = None) -> dict[str, float]:
+    path = current_budget_settings_path(request)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    values = payload.get("annual_budgets", payload)
+    if not isinstance(values, dict):
+        return {}
+    return {str(label): parse_budget_amount(amount) for label, amount in values.items()}
+
+
+def save_budget_settings(request: Optional[Request], annual_budgets: dict[str, float]) -> None:
+    path = current_budget_settings_path(request)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    clean = {
+        item["label"]: round(parse_budget_amount(annual_budgets.get(item["label"], 0.0)), 2)
+        for item in BUDGET_CATEGORIES
+    }
+    path.write_text(json.dumps({"annual_budgets": clean}, indent=2) + "\n", encoding="utf-8")
+
+
+def matching_budget_expenses(expenses: pd.DataFrame, category_key: str) -> pd.DataFrame:
+    if expenses.empty or "category" not in expenses.columns:
+        return expenses.iloc[0:0].copy()
+    return expenses[expenses["category"].fillna("").astype(str).str.lower() == category_key].copy()
+
+
+def category_total_for_period(expenses: pd.DataFrame, category_key: str, start: date, end: date) -> float:
+    frame = matching_budget_expenses(expenses, category_key)
+    if frame.empty:
+        return 0.0
+    filtered = filter_frame(frame, start, end)
+    if filtered.empty:
+        return 0.0
+    return float(filtered["amount"].sum())
+
+
+def same_month_day(year: int, anchor: date) -> date:
+    try:
+        return date(year, anchor.month, anchor.day)
+    except ValueError:
+        return date(year, anchor.month, calendar.monthrange(year, anchor.month)[1])
+
+
+def budget_ytd_ratio(anchor: date) -> float:
+    start = date(anchor.year, 1, 1)
+    end = date(anchor.year, 12, 31)
+    return ((anchor - start).days + 1) / ((end - start).days + 1)
+
+
+def budget_summary_rows(bundle: AnalysisBundle, request: Optional[Request] = None) -> list[dict[str, Any]]:
+    today = date.today()
+    current_year = today.year
+    previous_year = current_year - 1
+    previous_ytd_end = same_month_day(previous_year, today)
+    saved_budgets = load_budget_settings(request)
+    ytd_ratio = budget_ytd_ratio(today)
+    rows: list[dict[str, Any]] = []
+
+    for item in BUDGET_CATEGORIES:
+        label = item["label"]
+        category_key = item["category"]
+        previous_full = category_total_for_period(bundle.expenses, category_key, date(previous_year, 1, 1), date(previous_year, 12, 31))
+        annual_budget = saved_budgets.get(label, previous_full)
+        current_ytd = category_total_for_period(bundle.expenses, category_key, date(current_year, 1, 1), today)
+        previous_ytd = category_total_for_period(bundle.expenses, category_key, date(previous_year, 1, 1), previous_ytd_end)
+        previous_ytd_ratio = 0.0 if previous_full <= 0 else previous_ytd / previous_full
+        previous_ytd_equivalent = previous_ytd_ratio * annual_budget
+        ytd_budget = annual_budget * BUDGET_TARGET_FACTOR * ytd_ratio
+        percent_used = 0.0 if annual_budget <= 0 else (current_ytd / annual_budget) * 100
+        previous_percent_used = 0.0 if annual_budget <= 0 else (previous_ytd_equivalent / annual_budget) * 100
+        ytd_budget_percent = BUDGET_TARGET_FACTOR * ytd_ratio * 100
+        ytd_percent = 0.0 if ytd_budget <= 0 else (current_ytd / ytd_budget) * 100
+        rows.append(
+            {
+                "label": label,
+                "category": category_key,
+                "annual_budget": annual_budget,
+                "annual_budget_input": f"{annual_budget:.2f}",
+                "annual_budget_label": currency(annual_budget),
+                "current_ytd": current_ytd,
+                "current_ytd_label": currency(current_ytd),
+                "previous_ytd": previous_ytd,
+                "previous_ytd_label": currency(previous_ytd),
+                "previous_ytd_equivalent": previous_ytd_equivalent,
+                "previous_ytd_equivalent_label": currency(previous_ytd_equivalent),
+                "previous_ytd_share_label": f"{previous_ytd_ratio * 100:.1f}%",
+                "previous_full": previous_full,
+                "previous_full_label": currency(previous_full),
+                "ytd_budget": ytd_budget,
+                "ytd_budget_label": currency(ytd_budget),
+                "remaining_ytd": ytd_budget - current_ytd,
+                "remaining_ytd_label": currency(ytd_budget - current_ytd),
+                "percent_used": percent_used,
+                "percent_used_label": f"{percent_used:.1f}%",
+                "previous_percent_used": previous_percent_used,
+                "previous_percent_used_label": f"{previous_percent_used:.1f}%",
+                "ytd_budget_percent": ytd_budget_percent,
+                "ytd_budget_percent_label": f"{ytd_budget_percent:.1f}%",
+                "ytd_percent": ytd_percent,
+                "ytd_percent_label": f"{ytd_percent:.1f}%",
+                "status": "Over YTD" if current_ytd > ytd_budget and ytd_budget > 0 else "On Track",
+            }
+        )
+    return rows
+
+
+def budget_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    annual_budget = sum(float(row["annual_budget"]) for row in rows)
+    current_ytd = sum(float(row["current_ytd"]) for row in rows)
+    previous_ytd = sum(float(row["previous_ytd_equivalent"]) for row in rows)
+    ytd_budget = sum(float(row["ytd_budget"]) for row in rows)
+    percent_used = 0.0 if annual_budget <= 0 else (current_ytd / annual_budget) * 100
+    previous_percent_used = 0.0 if annual_budget <= 0 else (previous_ytd / annual_budget) * 100
+    return {
+        "annual_budget": currency(annual_budget),
+        "current_ytd": currency(current_ytd),
+        "previous_ytd": currency(previous_ytd),
+        "ytd_budget": currency(ytd_budget),
+        "remaining_ytd": currency(ytd_budget - current_ytd),
+        "percent_used": f"{percent_used:.1f}%",
+        "previous_percent_used": f"{previous_percent_used:.1f}%",
+        "ytd_percent": "0.0%" if ytd_budget <= 0 else f"{(current_ytd / ytd_budget) * 100:.1f}%",
+    }
 
 
 def filter_source_upload_columns(source_key: str, frame: pd.DataFrame) -> pd.DataFrame:
@@ -1588,6 +1751,51 @@ def dashboard_context(
     }
 
 
+def budget_context(request: Request, message: Optional[str]) -> dict[str, Any]:
+    bundle, missing_sources = load_bundle_safe(request)
+    rows = budget_summary_rows(bundle, request)
+    max_percent = max(
+        [
+            float(row[key])
+            for row in rows
+            for key in ("percent_used", "previous_percent_used", "ytd_budget_percent")
+        ]
+        + [100.0]
+    )
+    graph_max_percent = max(100.0, math.ceil(max_percent / 25.0) * 25.0)
+    axis_ticks = [0, 25, 50, 75, 100]
+    if graph_max_percent > 100:
+        tick_step = graph_max_percent / 4
+        axis_ticks = [round(tick_step * index) for index in range(5)]
+    for row in rows:
+        row["current_width"] = min((float(row["percent_used"]) / graph_max_percent) * 100, 100)
+        row["previous_width"] = min((float(row["previous_percent_used"]) / graph_max_percent) * 100, 100)
+        row["current_label_left"] = min(float(row["current_width"]), 72.0)
+        row["previous_label_left"] = min(float(row["previous_width"]), 72.0)
+        row["budget_marker"] = min((100.0 / graph_max_percent) * 100, 100)
+        row["ytd_marker"] = min((float(row["ytd_budget_percent"]) / graph_max_percent) * 100, 100)
+        row["is_over_ytd"] = float(row["current_ytd"]) > float(row["ytd_budget"]) and float(row["ytd_budget"]) > 0
+    today = date.today()
+    previous_ytd_end = same_month_day(today.year - 1, today)
+    return {
+        **base_template_context(request),
+        "message": message,
+        "active_page": "budget",
+        "missing_sources": missing_sources,
+        "show_upload_prompt": bool(missing_sources),
+        "budget_rows": rows,
+        "budget_totals": budget_totals(rows),
+        "current_year": today.year,
+        "previous_year": today.year - 1,
+        "current_ytd_end": today.isoformat(),
+        "previous_ytd_end": previous_ytd_end.isoformat(),
+        "axis_ticks": [{"label": f"{tick}%", "left": min((tick / graph_max_percent) * 100, 100)} for tick in axis_ticks],
+        "graph_max_percent": graph_max_percent,
+        "budget_settings_path": str(current_budget_settings_path(request)),
+        "can_persist_budget": not is_demo_session(request),
+    }
+
+
 def files_context(request: Request, message: Optional[str]) -> dict[str, Any]:
     return {
         **base_template_context(request),
@@ -1743,6 +1951,29 @@ def dashboard(
         message,
     )
     return templates.TemplateResponse("dashboard.html", context)
+
+
+@app.get("/budget", response_class=HTMLResponse)
+def budget_page(request: Request, message: Optional[str] = Query(None)) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    return templates.TemplateResponse("budget.html", budget_context(request, message))
+
+
+@app.post("/budget/save")
+async def save_budget_page(request: Request) -> RedirectResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    form = await request.form()
+    annual_budgets = {
+        item["label"]: parse_budget_amount(form.get(f"budget_{item['category']}", "0"))
+        for item in BUDGET_CATEGORIES
+    }
+    save_budget_settings(request, annual_budgets)
+    message = "Saved budget amounts." if not is_demo_session(request) else "Saved sandbox budget amounts for this session."
+    return RedirectResponse(url=f"/budget?message={urlencode({'m': message})[2:]}", status_code=303)
 
 
 @app.get("/files", response_class=HTMLResponse)
