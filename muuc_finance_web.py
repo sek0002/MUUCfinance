@@ -537,18 +537,40 @@ def budget_export_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont 
             [
                 "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
                 "/Library/Fonts/Arial Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+                "DejaVuSans-Bold.ttf",
+                "LiberationSans-Bold.ttf",
+                "Arial Bold.ttf",
             ]
         )
     candidates.extend(
         [
             "/System/Library/Fonts/Supplemental/Arial.ttf",
             "/Library/Fonts/Arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+            "DejaVuSans.ttf",
+            "LiberationSans-Regular.ttf",
+            "Arial.ttf",
         ]
     )
     for candidate in candidates:
-        if Path(candidate).exists():
-            return ImageFont.truetype(candidate, size)
-    return ImageFont.load_default()
+        if Path(candidate).exists() or not Path(candidate).is_absolute():
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def fit_export_text(draw: ImageDraw.ImageDraw, text_value: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_width: int) -> str:
@@ -602,9 +624,31 @@ def export_rounded_rectangle(
     width: int = 1,
 ) -> None:
     if hasattr(draw, "rounded_rectangle"):
-        draw.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline, width=width)
+        try:
+            draw.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline, width=width)
+        except TypeError:
+            draw.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline)
         return
-    draw.rectangle(xy, fill=fill, outline=outline, width=width)
+    x0, y0, x1, y1 = xy
+    radius = max(0, min(radius, (x1 - x0) // 2, (y1 - y0) // 2))
+    if fill:
+        draw.rectangle((x0 + radius, y0, x1 - radius, y1), fill=fill)
+        draw.rectangle((x0, y0 + radius, x1, y1 - radius), fill=fill)
+        draw.pieslice((x0, y0, x0 + radius * 2, y0 + radius * 2), 180, 270, fill=fill)
+        draw.pieslice((x1 - radius * 2, y0, x1, y0 + radius * 2), 270, 360, fill=fill)
+        draw.pieslice((x1 - radius * 2, y1 - radius * 2, x1, y1), 0, 90, fill=fill)
+        draw.pieslice((x0, y1 - radius * 2, x0 + radius * 2, y1), 90, 180, fill=fill)
+    if outline:
+        for offset in range(max(1, width)):
+            box = (x0 + offset, y0 + offset, x1 - offset, y1 - offset)
+            draw.arc((box[0], box[1], box[0] + radius * 2, box[1] + radius * 2), 180, 270, fill=outline)
+            draw.arc((box[2] - radius * 2, box[1], box[2], box[1] + radius * 2), 270, 360, fill=outline)
+            draw.arc((box[2] - radius * 2, box[3] - radius * 2, box[2], box[3]), 0, 90, fill=outline)
+            draw.arc((box[0], box[3] - radius * 2, box[0] + radius * 2, box[3]), 90, 180, fill=outline)
+            draw.line((box[0] + radius, box[1], box[2] - radius, box[1]), fill=outline)
+            draw.line((box[0] + radius, box[3], box[2] - radius, box[3]), fill=outline)
+            draw.line((box[0], box[1] + radius, box[0], box[3] - radius), fill=outline)
+            draw.line((box[2], box[1] + radius, box[2], box[3] - radius), fill=outline)
 
 
 def render_budget_export_png(rows: list[dict[str, Any]]) -> bytes:
@@ -848,7 +892,7 @@ def render_budget_export_fallback_png(rows: list[dict[str, Any]]) -> bytes:
     height = pad * 2 + row_h * (len(rows) + 1)
     image = Image.new("RGB", (width, height), "#f8fafc")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default()
+    font = budget_export_font(9 * scale, bold=True)
     total_budget = sum(float(row["annual_budget"]) for row in rows)
     total_current = sum(float(row["current_ytd"]) for row in rows)
     draw_rows = [
