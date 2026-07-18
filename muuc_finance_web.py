@@ -1933,7 +1933,7 @@ def category_rows(series: pd.Series) -> list[dict[str, Any]]:
 def transaction_rows(frame: pd.DataFrame, include_contact: bool) -> list[dict[str, Any]]:
     if frame.empty:
         return []
-    ordered = frame.sort_values(["date", "category", "amount"], ascending=[False, True, False]).head(250)
+    ordered = frame.sort_values(["date", "category", "amount"], ascending=[False, True, False])
     rows: list[dict[str, Any]] = []
     for _, row in ordered.iterrows():
         dt = pd.to_datetime(row.get("date"), errors="coerce")
@@ -2031,7 +2031,7 @@ def chart_category_detail_rows(income: pd.DataFrame, expenses: pd.DataFrame, sel
     combined = pd.concat([income_frame, expense_frame], ignore_index=True, sort=False)
     if combined.empty:
         return rows
-    ordered = combined.sort_values(["date", "category", "amount"], ascending=[False, True, False]).head(300)
+    ordered = combined.sort_values(["date", "category", "amount"], ascending=[False, True, False])
     for _, row in ordered.iterrows():
         dt = pd.to_datetime(row.get("date"), errors="coerce")
         amount_value = float(row.get("amount", 0.0))
@@ -2253,7 +2253,7 @@ def dashboard_context(
         "misc_count": len(filter_frame(bundle.misc_income, start, end)) + len(filter_frame(bundle.misc_expenses, start, end)),
         "income_rows": category_rows(income_summary),
         "expense_rows": category_rows(expense_summary),
-        "recent_transactions": transaction_rows(recent_transactions, include_contact=True)[:24],
+        "recent_transactions": transaction_rows(recent_transactions, include_contact=True),
         "export_query": export_query,
         "graph_mode": graph_mode_value,
         "chart_style": chart_style_value,
