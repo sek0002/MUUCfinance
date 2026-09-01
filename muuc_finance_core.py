@@ -26,6 +26,10 @@ SOURCE_FILENAMES = {
     "teamapp": "teamapp.csv",
     "everyday": "everyday.csv",
 }
+INTERNAL_TRANSFER_DESCRIPTION_MARKERS = (
+    "S4897162544",
+    "958022056",
+)
 
 BG_PRIMARY = "#16181c"
 BG_PANEL = "#1f232a"
@@ -294,12 +298,14 @@ def _load_everyday_frame(everyday_path: Path) -> pd.DataFrame:
     tx_type = df.get("Transaction Type", pd.Series("", index=df.index)).fillna("").astype(str)
     detail_text = df.get("Transaction Details", pd.Series("", index=df.index)).fillna("").astype(str)
     merchant_text = df.get("Merchant Name", pd.Series("", index=df.index)).fillna("").astype(str)
+    description_text = (detail_text + " " + merchant_text).str.strip()
     # Exclude bank-internal movements before sign-based income/expense handling.
     interbank_mask = tx_type.str.contains("inter-bank", case=False, na=False)
-    linked_account_mask = detail_text.str.contains("linked acc trns muuc", case=False, na=False)
-    df = df[~(interbank_mask | linked_account_mask)].copy()
-    detail_text = detail_text.loc[df.index] + " " + merchant_text.loc[df.index]
-    df["description"] = detail_text.str.strip()
+    linked_account_mask = description_text.str.contains("linked acc trns muuc", case=False, na=False)
+    internal_reference_pattern = "|".join(re.escape(marker) for marker in INTERNAL_TRANSFER_DESCRIPTION_MARKERS)
+    internal_reference_mask = description_text.str.contains(internal_reference_pattern, case=False, na=False)
+    df = df[~(interbank_mask | linked_account_mask | internal_reference_mask)].copy()
+    df["description"] = description_text.loc[df.index]
     return df
 
 
