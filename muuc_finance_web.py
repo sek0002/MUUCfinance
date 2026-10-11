@@ -1255,15 +1255,16 @@ def render_income_export_canvas(
     scale = 2
     pad = 5 * scale
     label_w = 76 * scale
-    bar_w = 195 * scale
+    bar_w = 244 * scale
     change_w = 96 * scale
     title_h = 24 * scale
     summary_row_h = 22 * scale
+    summary_row_count = 3
     legend_h = 18 * scale
     category_row_h = 36 * scale
     note_h = 18 * scale
     width = pad * 2 + label_w + bar_w + change_w
-    chart_top = pad + title_h + summary_row_h * 2 + legend_h
+    chart_top = pad + title_h + summary_row_h * summary_row_count + legend_h
     height = chart_top + category_row_h * len(rows) + note_h + pad
 
     image = Image.new("RGB", (width, height), "#f8fafc")
@@ -1282,7 +1283,6 @@ def render_income_export_canvas(
     muted = "#64748b"
     positive = "#059669"
     negative = "#ef4444"
-    white = "#ffffff"
     bar_x = pad + label_w
     change_x = bar_x + bar_w + 6 * scale
 
@@ -1324,9 +1324,15 @@ def render_income_export_canvas(
 
     summary_rows = [
         {
+            "label": f"{previous_year} YTD",
+            "value": float(totals["previous_ytd_value"]),
+            "change": None,
+            "percent": None,
+            "color": previous_color,
+        },
+        {
             "label": f"{current_year} YTD",
             "value": float(totals["current_ytd_value"]),
-            "baseline": float(totals["previous_ytd_value"]),
             "change": float(totals["ytd_change_value"]),
             "percent": totals["ytd_change_percent_value"],
             "color": current_color,
@@ -1334,52 +1340,43 @@ def render_income_export_canvas(
         {
             "label": "Projected",
             "value": float(totals["projected_eoy_value"]),
-            "baseline": float(totals["previous_full_value"]),
             "change": float(totals["projected_change_value"]),
             "percent": totals["projected_change_percent_value"],
             "color": projected_color,
         },
     ]
-    summary_ratios = [
-        (float(item["value"]) / float(item["baseline"]) * 100) if float(item["baseline"]) > 0 else 0.0
-        for item in summary_rows
-    ]
-    summary_graph_max = max(100.0, math.ceil(max(summary_ratios + [100.0]) / 25.0) * 25.0)
+    summary_max = max([float(item["value"]) for item in summary_rows] + [1.0])
     bar_h = 15 * scale
     for index, item in enumerate(summary_rows):
         y = pad + title_h + index * summary_row_h
         cy = y + summary_row_h // 2
         by = cy - bar_h // 2
         value = float(item["value"])
-        baseline = float(item["baseline"])
-        ratio = summary_ratios[index]
         export_draw_text(draw, (pad, cy), str(item["label"]), label_font, text_color, anchor="lm")
         draw_bar(bar_x, by, bar_w, bar_h, track_color, track_edge)
-        fill_w = int(min(ratio, summary_graph_max) / summary_graph_max * bar_w) if summary_graph_max else 0
+        fill_w = int(value / summary_max * bar_w) if summary_max else 0
         if fill_w > 0:
             draw_bar(bar_x, by, max(fill_w, 2 * scale), bar_h, str(item["color"]))
-        if summary_graph_max > 100:
-            marker_x = bar_x + int(100 / summary_graph_max * bar_w)
-            draw.line((marker_x, by - scale, marker_x, by + bar_h + scale), fill=muted, width=scale)
         value_text = fit_export_text(
             draw,
-            f"{compact_currency(value)} / {compact_currency(baseline)}",
+            compact_currency(value),
             inside_font,
             bar_w - 10 * scale,
         )
         export_draw_text(draw, (bar_x + 5 * scale, cy), value_text, inside_font, text_color, anchor="lm")
-        delta = change_text(float(item["change"]), item["percent"])
-        delta_color = positive if float(item["change"]) >= 0 else negative
-        export_draw_text(
-            draw,
-            (change_x, cy),
-            fit_export_text(draw, delta, change_font, change_w - 6 * scale),
-            change_font,
-            delta_color,
-            anchor="lm",
-        )
+        if item["change"] is not None:
+            delta = change_text(float(item["change"]), item["percent"])
+            delta_color = positive if float(item["change"]) >= 0 else negative
+            export_draw_text(
+                draw,
+                (change_x, cy),
+                fit_export_text(draw, delta, change_font, change_w - 6 * scale),
+                change_font,
+                delta_color,
+                anchor="lm",
+            )
 
-    legend_y = pad + title_h + summary_row_h * 2 + legend_h // 2
+    legend_y = pad + title_h + summary_row_h * summary_row_count + legend_h // 2
     legend_items = [
         (f"{previous_year} YTD", previous_color),
         (f"{current_year} YTD", current_color),
