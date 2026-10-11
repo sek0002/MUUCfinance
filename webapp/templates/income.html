@@ -112,27 +112,20 @@
           <strong class="income-projection-value">{{ row.projected_eoy_label }} projected</strong>
         </div>
 
-        <div class="income-bars" aria-label="{{ row.label }} income comparison">
-          <div class="income-bar-line">
-            <span class="income-bar-name">{{ previous_year }} YTD</span>
-            <div class="income-track"><span class="income-bar previous" style="width: {{ row.previous_ytd_width }}%"></span></div>
-            <strong>{{ row.previous_ytd_label }}</strong>
+        <div class="income-overlay-chart" aria-label="{{ row.label }} overlaid income comparison">
+          <div class="income-overlay-track">
+            <span class="income-overlay-bar projected" style="width: {{ row.projected_eoy_width }}%" title="Projected {{ current_year }} EOY: {{ row.projected_eoy_label }}"></span>
+            <span class="income-overlay-bar previous" style="width: {{ row.previous_ytd_width }}%" title="{{ previous_year }} YTD: {{ row.previous_ytd_label }}"></span>
+            <span class="income-overlay-bar current" style="width: {{ row.current_ytd_width }}%" title="{{ current_year }} YTD: {{ row.current_ytd_label }}"></span>
           </div>
-          <div class="income-bar-line">
-            <span class="income-bar-name">{{ current_year }} YTD</span>
-            <div class="income-track"><span class="income-bar current" style="width: {{ row.current_ytd_width }}%; background: {{ row.color }}"></span></div>
-            <strong>{{ row.current_ytd_label }}</strong>
-          </div>
-          <div class="income-bar-line">
-            <span class="income-bar-name">Projection</span>
-            <div class="income-track"><span class="income-bar projected" style="width: {{ row.projected_eoy_width }}%"></span></div>
-            <strong>{{ row.projected_eoy_label }}</strong>
+          <div class="income-overlay-values">
+            <span class="previous"><i></i>{{ previous_year }} YTD <strong>{{ row.previous_ytd_label }}</strong></span>
+            <span class="current"><i></i>{{ current_year }} YTD <strong>{{ row.current_ytd_label }}</strong></span>
+            <span class="projected"><i></i>Projected EOY <strong>{{ row.projected_eoy_label }}</strong></span>
           </div>
         </div>
 
         <div class="income-row-values">
-          <span>{{ previous_year }} YTD {{ row.previous_ytd_label }}</span>
-          <span>{{ current_year }} YTD {{ row.current_ytd_label }}</span>
           <span>{{ previous_year }} remaining {{ row.previous_remaining_label }}</span>
           <span>{{ previous_year }} full year {{ row.previous_full_label }}</span>
           <span>

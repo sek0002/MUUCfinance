@@ -1253,7 +1253,7 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
     pad = 28 * scale
     summary_h = 86 * scale
     legend_h = 34 * scale
-    row_h = 54 * scale
+    row_h = 60 * scale
     chart_top = pad + 62 * scale + summary_h + legend_h
     height = chart_top + row_h * len(rows) + 42 * scale
 
@@ -1273,6 +1273,12 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
     previous_color = "#94a3b8"
     current_color = "#14b8a6"
     projected_color = "#8b5cf6"
+    ytd_change_percent_value = totals["ytd_change_percent_value"]
+    ytd_change_percent_short = (
+        "—"
+        if ytd_change_percent_value is None
+        else f"{'+' if float(ytd_change_percent_value) >= 0 else '−'}{abs(float(ytd_change_percent_value)):.0f}%"
+    )
 
     export_draw_text(draw, (pad, pad), "Income comparison", title_font, text)
     export_draw_text(
@@ -1288,7 +1294,7 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
         (f"{previous_year} YTD", str(totals["previous_ytd"]), previous_color),
         (
             "YTD change",
-            f"{'+' if float(totals['ytd_change_value']) >= 0 else '−'}{compact_currency(abs(float(totals['ytd_change_value'])))} · {totals['ytd_change_percent']}",
+            f"{'+' if float(totals['ytd_change_value']) >= 0 else '−'}{compact_currency(abs(float(totals['ytd_change_value'])))} · {ytd_change_percent_short}",
             current_color if totals["is_ytd_up"] else "#ef4444",
         ),
         ("Projected EOY", str(totals["projected_eoy"]), projected_color),
@@ -1328,9 +1334,8 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
         legend_x += (22 + max(82, len(label) * 5)) * scale
 
     label_w = 112 * scale
-    value_w = 92 * scale
     bar_x = pad + label_w
-    bar_w = width - bar_x - value_w - pad
+    bar_w = width - bar_x - pad
     max_value = max(
         [
             float(row[key])
@@ -1343,34 +1348,68 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
         y = chart_top + index * row_h
         if index % 2 == 0:
             draw.rectangle((pad, y, width - pad, y + row_h - 4 * scale), fill="#f1f5f9")
-        export_draw_text(draw, (pad + 6 * scale, y + 23 * scale), str(row["label"]), label_font, text, anchor="lm")
-        series = [
-            (float(row["previous_ytd"]), previous_color, 8),
-            (float(row["current_ytd"]), current_color, 21),
-            (float(row["projected_eoy"]), projected_color, 34),
-        ]
-        for amount, color, y_offset in series:
-            by = y + y_offset * scale
+        export_draw_text(draw, (pad + 6 * scale, y + 24 * scale), str(row["label"]), label_font, text, anchor="lm")
+        track_y = y + 8 * scale
+        track_h = 30 * scale
+        draw.rounded_rectangle(
+            (bar_x, track_y, bar_x + bar_w, track_y + track_h),
+            radius=track_h // 2,
+            fill="#e2e8f0",
+            outline=line,
+            width=scale,
+        )
+        projected_w = int((float(row["projected_eoy"]) / max_value) * bar_w) if max_value > 0 else 0
+        previous_w = int((float(row["previous_ytd"]) / max_value) * bar_w) if max_value > 0 else 0
+        current_w = int((float(row["current_ytd"]) / max_value) * bar_w) if max_value > 0 else 0
+        if projected_w > 0:
             draw.rounded_rectangle(
-                (bar_x, by, bar_x + bar_w, by + 8 * scale),
-                radius=4 * scale,
-                fill="#e2e8f0",
+                (bar_x, track_y, bar_x + max(projected_w, 2 * scale), track_y + track_h),
+                radius=track_h // 2,
+                fill="#ddd6fe",
+                outline=projected_color,
+                width=2 * scale,
             )
-            fill_w = int((amount / max_value) * bar_w) if max_value > 0 else 0
-            if fill_w > 0:
-                draw.rounded_rectangle(
-                    (bar_x, by, bar_x + max(fill_w, 2 * scale), by + 8 * scale),
-                    radius=4 * scale,
-                    fill=color,
-                )
-            export_draw_text(
-                draw,
-                (bar_x + bar_w + 8 * scale, by + 4 * scale),
-                compact_currency(amount),
-                value_font,
-                color,
-                anchor="lm",
+        previous_h = 18 * scale
+        previous_y = track_y + (track_h - previous_h) // 2
+        if previous_w > 0:
+            draw.rounded_rectangle(
+                (bar_x, previous_y, bar_x + max(previous_w, 2 * scale), previous_y + previous_h),
+                radius=previous_h // 2,
+                fill=previous_color,
             )
+        current_h = 8 * scale
+        current_y = track_y + (track_h - current_h) // 2
+        if current_w > 0:
+            draw.rounded_rectangle(
+                (bar_x, current_y, bar_x + max(current_w, 2 * scale), current_y + current_h),
+                radius=current_h // 2,
+                fill=current_color,
+            )
+        values_y = y + 45 * scale
+        export_draw_text(
+            draw,
+            (bar_x, values_y),
+            f"{previous_year} YTD {compact_currency(float(row['previous_ytd']))}",
+            value_font,
+            previous_color,
+            anchor="lm",
+        )
+        export_draw_text(
+            draw,
+            (bar_x + bar_w // 2, values_y),
+            f"{current_year} YTD {compact_currency(float(row['current_ytd']))}",
+            value_font,
+            current_color,
+            anchor="mm",
+        )
+        export_draw_text(
+            draw,
+            (bar_x + bar_w, values_y),
+            f"Projected {compact_currency(float(row['projected_eoy']))}",
+            value_font,
+            projected_color,
+            anchor="rm",
+        )
         draw.line((pad, y + row_h - 4 * scale, width - pad, y + row_h - 4 * scale), fill=line, width=scale)
 
     note_y = chart_top + row_h * len(rows) + 8 * scale
