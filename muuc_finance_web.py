@@ -1243,241 +1243,215 @@ def render_budget_export_fallback_png(rows: list[dict[str, Any]]) -> bytes:
     return buffer.getvalue()
 
 
-def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] = None) -> bytes:
+def render_income_export_canvas(
+    rows: list[dict[str, Any]],
+    anchor: Optional[date] = None,
+    rounded: bool = True,
+) -> bytes:
     today = anchor or date.today()
     current_year = today.year
     previous_year = current_year - 1
     totals = income_comparison_totals(rows)
     scale = 2
-    width = 780 * scale
-    pad = 28 * scale
-    summary_h = 86 * scale
-    legend_h = 34 * scale
-    row_h = 60 * scale
-    chart_top = pad + 62 * scale + summary_h + legend_h
-    height = chart_top + row_h * len(rows) + 42 * scale
+    pad = 5 * scale
+    label_w = 76 * scale
+    bar_w = 195 * scale
+    change_w = 96 * scale
+    title_h = 24 * scale
+    summary_row_h = 22 * scale
+    legend_h = 18 * scale
+    category_row_h = 36 * scale
+    note_h = 18 * scale
+    width = pad * 2 + label_w + bar_w + change_w
+    chart_top = pad + title_h + summary_row_h * 2 + legend_h
+    height = chart_top + category_row_h * len(rows) + note_h + pad
 
     image = Image.new("RGB", (width, height), "#f8fafc")
     draw = ImageDraw.Draw(image)
-    title_font = budget_export_font(22 * scale, bold=True)
-    subtitle_font = budget_export_font(10 * scale)
-    summary_label_font = budget_export_font(9 * scale, bold=True)
-    summary_value_font = budget_export_font(15 * scale, bold=True)
-    label_font = budget_export_font(10 * scale, bold=True)
-    value_font = budget_export_font(8 * scale, bold=True)
-    note_font = budget_export_font(8 * scale)
-
-    text = "#111827"
-    muted = "#64748b"
-    line = "#dbe3ec"
+    title_font = budget_export_font(13 * scale, bold=True)
+    label_font = budget_export_font(13 * scale, bold=True)
+    inside_font = budget_export_font(9 * scale, bold=True)
+    change_font = budget_export_font(8 * scale, bold=True)
+    note_font = budget_export_font(8 * scale, bold=True)
     previous_color = "#94a3b8"
     current_color = "#14b8a6"
     projected_color = "#8b5cf6"
-    ytd_change_percent_value = totals["ytd_change_percent_value"]
-    ytd_change_percent_short = (
-        "—"
-        if ytd_change_percent_value is None
-        else f"{'+' if float(ytd_change_percent_value) >= 0 else '−'}{abs(float(ytd_change_percent_value)):.0f}%"
-    )
+    track_color = "#eef2f7"
+    track_edge = "#cbd5e1"
+    text_color = "#111827"
+    muted = "#64748b"
+    positive = "#059669"
+    negative = "#ef4444"
+    white = "#ffffff"
+    bar_x = pad + label_w
+    change_x = bar_x + bar_w + 6 * scale
 
-    export_draw_text(draw, (pad, pad), "Income comparison", title_font, text)
+    def compact_signed(value: float) -> str:
+        if abs(value) < 0.005:
+            return "$0"
+        return f"{'+' if value > 0 else '-'}{compact_currency(abs(value))}"
+
+    def signed_percent(value: Optional[float]) -> str:
+        if value is None:
+            return "--"
+        return f"{'+' if value >= 0 else '-'}{abs(value):.1f}%"
+
+    def change_text(value: float, percent: Optional[float]) -> str:
+        return f"{compact_signed(value)} | {signed_percent(percent)}"
+
+    def draw_bar(x: int, y: int, width_value: int, height_value: int, fill: str, outline: Optional[str] = None) -> None:
+        if rounded:
+            export_rounded_rectangle(
+                draw,
+                (x, y, x + width_value, y + height_value),
+                radius=min(6 * scale, height_value // 2),
+                fill=fill,
+                outline=outline,
+                width=scale,
+            )
+        else:
+            draw.rectangle((x, y, x + width_value, y + height_value), fill=fill, outline=outline, width=scale)
+
+    export_draw_text(draw, (pad, pad + 8 * scale), "Income comparison", title_font, text_color, anchor="lm")
     export_draw_text(
         draw,
-        (pad, pad + 34 * scale),
-        f"{current_year} YTD to {today.strftime('%d %b')} · projection adds the equivalent remaining {previous_year} income",
-        subtitle_font,
+        (width - pad, pad + 8 * scale),
+        today.strftime("%d %b %Y"),
+        note_font,
         muted,
+        anchor="rm",
     )
 
-    summary_items = [
-        (f"{current_year} YTD", str(totals["current_ytd"]), current_color),
-        (f"{previous_year} YTD", str(totals["previous_ytd"]), previous_color),
-        (
-            "YTD change",
-            f"{'+' if float(totals['ytd_change_value']) >= 0 else '−'}{compact_currency(abs(float(totals['ytd_change_value'])))} · {ytd_change_percent_short}",
-            current_color if totals["is_ytd_up"] else "#ef4444",
-        ),
-        ("Projected EOY", str(totals["projected_eoy"]), projected_color),
-        (f"{previous_year} full year", str(totals["previous_full"]), text),
+    summary_rows = [
+        {
+            "label": f"{current_year} YTD",
+            "value": float(totals["current_ytd_value"]),
+            "baseline": float(totals["previous_ytd_value"]),
+            "change": float(totals["ytd_change_value"]),
+            "percent": totals["ytd_change_percent_value"],
+            "color": current_color,
+        },
+        {
+            "label": "Projected",
+            "value": float(totals["projected_eoy_value"]),
+            "baseline": float(totals["previous_full_value"]),
+            "change": float(totals["projected_change_value"]),
+            "percent": totals["projected_change_percent_value"],
+            "color": projected_color,
+        },
     ]
-    summary_y = pad + 58 * scale
-    gap = 8 * scale
-    card_w = (width - pad * 2 - gap * (len(summary_items) - 1)) // len(summary_items)
-    for index, (label, value, color) in enumerate(summary_items):
-        x = pad + index * (card_w + gap)
-        export_rounded_rectangle(
+    summary_ratios = [
+        (float(item["value"]) / float(item["baseline"]) * 100) if float(item["baseline"]) > 0 else 0.0
+        for item in summary_rows
+    ]
+    summary_graph_max = max(100.0, math.ceil(max(summary_ratios + [100.0]) / 25.0) * 25.0)
+    bar_h = 15 * scale
+    for index, item in enumerate(summary_rows):
+        y = pad + title_h + index * summary_row_h
+        cy = y + summary_row_h // 2
+        by = cy - bar_h // 2
+        value = float(item["value"])
+        baseline = float(item["baseline"])
+        ratio = summary_ratios[index]
+        export_draw_text(draw, (pad, cy), str(item["label"]), label_font, text_color, anchor="lm")
+        draw_bar(bar_x, by, bar_w, bar_h, track_color, track_edge)
+        fill_w = int(min(ratio, summary_graph_max) / summary_graph_max * bar_w) if summary_graph_max else 0
+        if fill_w > 0:
+            draw_bar(bar_x, by, max(fill_w, 2 * scale), bar_h, str(item["color"]))
+        if summary_graph_max > 100:
+            marker_x = bar_x + int(100 / summary_graph_max * bar_w)
+            draw.line((marker_x, by - scale, marker_x, by + bar_h + scale), fill=muted, width=scale)
+        value_text = fit_export_text(
             draw,
-            (x, summary_y, x + card_w, summary_y + summary_h - 12 * scale),
-            radius=8 * scale,
-            fill="#ffffff",
-            outline=line,
-            width=scale,
+            f"{compact_currency(value)} / {compact_currency(baseline)}",
+            inside_font,
+            bar_w - 10 * scale,
         )
-        export_draw_text(draw, (x + 10 * scale, summary_y + 13 * scale), label, summary_label_font, muted)
-        fitted_value = fit_export_text(draw, value, summary_value_font, card_w - 20 * scale)
-        export_draw_text(draw, (x + 10 * scale, summary_y + 39 * scale), fitted_value, summary_value_font, color)
+        export_draw_text(draw, (bar_x + 5 * scale, cy), value_text, inside_font, text_color, anchor="lm")
+        delta = change_text(float(item["change"]), item["percent"])
+        delta_color = positive if float(item["change"]) >= 0 else negative
+        export_draw_text(
+            draw,
+            (change_x, cy),
+            fit_export_text(draw, delta, change_font, change_w - 6 * scale),
+            change_font,
+            delta_color,
+            anchor="lm",
+        )
 
-    legend_y = pad + 58 * scale + summary_h
+    legend_y = pad + title_h + summary_row_h * 2 + legend_h // 2
     legend_items = [
         (f"{previous_year} YTD", previous_color),
         (f"{current_year} YTD", current_color),
-        (f"Projected {current_year} EOY", projected_color),
+        (f"Projected {current_year}", projected_color),
     ]
-    legend_x = pad
-    for label, color in legend_items:
-        export_rounded_rectangle(
-            draw,
-            (legend_x, legend_y, legend_x + 16 * scale, legend_y + 8 * scale),
-            radius=4 * scale,
-            fill=color,
-        )
-        export_draw_text(draw, (legend_x + 22 * scale, legend_y + 4 * scale), label, note_font, muted, anchor="lm")
-        legend_x += (22 + max(82, len(label) * 5)) * scale
+    legend_x = bar_x
+    for legend_label, legend_color in legend_items:
+        draw_bar(legend_x, legend_y - 4 * scale, 12 * scale, 8 * scale, legend_color)
+        export_draw_text(draw, (legend_x + 16 * scale, legend_y), legend_label, note_font, muted, anchor="lm")
+        legend_x += (16 + max(58, len(legend_label) * 4)) * scale
 
-    label_w = 112 * scale
-    value_w = 92 * scale
-    bar_x = pad + label_w
-    bar_w = width - bar_x - value_w - pad
     max_value = max(
-        [
-            float(row[key])
-            for row in rows
-            for key in ("previous_ytd", "current_ytd", "projected_eoy")
-        ]
-        + [1.0]
+        [float(row[key]) for row in rows for key in ("previous_ytd", "current_ytd", "projected_eoy")] + [1.0]
     )
+    category_bar_h = 9 * scale
     for index, row in enumerate(rows):
-        y = chart_top + index * row_h
+        y = chart_top + index * category_row_h
         if index % 2 == 0:
-            draw.rectangle((pad, y, width - pad, y + row_h - 4 * scale), fill="#f1f5f9")
-        export_draw_text(draw, (pad + 6 * scale, y + 23 * scale), str(row["label"]), label_font, text, anchor="lm")
+            draw.rectangle((pad, y, width - pad, y + category_row_h), fill="#f1f5f9")
+        export_draw_text(draw, (pad, y + category_row_h // 2), str(row["label"]), label_font, text_color, anchor="lm")
         series = [
-            (float(row["previous_ytd"]), previous_color, 8),
-            (float(row["current_ytd"]), current_color, 21),
-            (float(row["projected_eoy"]), projected_color, 34),
+            ("previous_ytd", previous_color, "", None, None),
+            ("current_ytd", current_color, "YTD", float(row["ytd_change"]), row["ytd_change_percent"]),
+            ("projected_eoy", projected_color, "EOY", float(row["projected_change"]), row["projected_change_percent"]),
         ]
-        for amount, color, y_offset in series:
-            by = y + y_offset * scale
-            export_rounded_rectangle(
-                draw,
-                (bar_x, by, bar_x + bar_w, by + 8 * scale),
-                radius=4 * scale,
-                fill="#e2e8f0",
-            )
+        for series_index, (key, color, prefix, delta_value, delta_percent) in enumerate(series):
+            amount = float(row[key])
+            by = y + (2 + series_index * 11) * scale
+            draw_bar(bar_x, by, bar_w, category_bar_h, track_color)
             fill_w = int((amount / max_value) * bar_w) if max_value > 0 else 0
             if fill_w > 0:
-                export_rounded_rectangle(
-                    draw,
-                    (bar_x, by, bar_x + max(fill_w, 2 * scale), by + 8 * scale),
-                    radius=4 * scale,
-                    fill=color,
-                )
+                draw_bar(bar_x, by, max(fill_w, 2 * scale), category_bar_h, color)
             export_draw_text(
                 draw,
-                (bar_x + bar_w + 8 * scale, by + 4 * scale),
+                (bar_x + 4 * scale, by + category_bar_h // 2),
                 compact_currency(amount),
-                value_font,
-                color,
+                inside_font,
+                text_color,
                 anchor="lm",
             )
-        draw.line((pad, y + row_h - 4 * scale, width - pad, y + row_h - 4 * scale), fill=line, width=scale)
+            if delta_value is not None:
+                delta = f"{prefix} {change_text(delta_value, delta_percent)}"
+                export_draw_text(
+                    draw,
+                    (change_x, by + category_bar_h // 2),
+                    fit_export_text(draw, delta, change_font, change_w - 6 * scale),
+                    change_font,
+                    positive if delta_value >= 0 else negative,
+                    anchor="lm",
+                )
+        draw.line((pad, y + category_row_h, width - pad, y + category_row_h), fill=track_edge, width=scale)
 
-    note_y = chart_top + row_h * len(rows) + 8 * scale
+    note_y = chart_top + category_row_h * len(rows) + note_h // 2
     export_draw_text(
         draw,
         (pad, note_y),
-        f"Projection = {current_year} YTD + {previous_year} income from {(same_month_day(previous_year, today) + timedelta(days=1)).strftime('%d %b')} to 31 Dec.",
+        f"Projection = {current_year} YTD + {previous_year} income from {(same_month_day(previous_year, today) + timedelta(days=1)).strftime('%d %b')} to 31 Dec ({compact_currency(float(totals['previous_remaining_value']))}).",
         note_font,
         muted,
+        anchor="lm",
     )
     buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=True)
+    image.save(buffer, format="PNG", optimize=rounded)
     return buffer.getvalue()
+
+
+def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] = None) -> bytes:
+    return render_income_export_canvas(rows, anchor=anchor, rounded=True)
 
 
 def render_income_export_fallback_png(rows: list[dict[str, Any]], anchor: Optional[date] = None) -> bytes:
-    today = anchor or date.today()
-    current_year = today.year
-    previous_year = current_year - 1
-    totals = income_comparison_totals(rows)
-    scale = 2
-    width = 680 * scale
-    pad = 16 * scale
-    title_h = 56 * scale
-    row_h = 54 * scale
-    note_h = 22 * scale
-    height = pad * 2 + title_h + row_h * len(rows) + note_h
-    label_w = 96 * scale
-    value_w = 72 * scale
-    bar_x = pad + label_w
-    bar_w = width - bar_x - value_w - pad
-
-    image = Image.new("RGB", (width, height), "#f8fafc")
-    draw = ImageDraw.Draw(image)
-    title_font = budget_export_font(16 * scale, bold=True)
-    font = budget_export_font(8 * scale, bold=True)
-    note_font = budget_export_font(7 * scale)
-    previous_color = "#94a3b8"
-    current_color = "#14b8a6"
-    projected_color = "#8b5cf6"
-    track_color = "#e2e8f0"
-    text_color = "#111827"
-    muted = "#64748b"
-
-    export_draw_text(draw, (pad, pad), "Income comparison", title_font, text_color)
-    export_draw_text(
-        draw,
-        (pad, pad + 26 * scale),
-        f"{current_year} YTD {totals['current_ytd']} | projected EOY {totals['projected_eoy']}",
-        note_font,
-        muted,
-    )
-
-    max_value = max(
-        [
-            float(row[key])
-            for row in rows
-            for key in ("previous_ytd", "current_ytd", "projected_eoy")
-        ]
-        + [1.0]
-    )
-    series_keys = [
-        ("previous_ytd", previous_color),
-        ("current_ytd", current_color),
-        ("projected_eoy", projected_color),
-    ]
-    chart_top = pad + title_h
-    for index, row in enumerate(rows):
-        y = chart_top + index * row_h
-        if index % 2 == 0:
-            draw.rectangle((pad, y, width - pad, y + row_h - 2 * scale), fill="#f1f5f9")
-        export_draw_text(draw, (pad + 4 * scale, y + 22 * scale), str(row["label"]), font, text_color, anchor="lm")
-        for series_index, (key, color) in enumerate(series_keys):
-            amount = float(row[key])
-            by = y + (6 + series_index * 13) * scale
-            draw.rectangle((bar_x, by, bar_x + bar_w, by + 8 * scale), fill=track_color)
-            fill_w = int((amount / max_value) * bar_w) if max_value > 0 else 0
-            if fill_w > 0:
-                draw.rectangle((bar_x, by, bar_x + max(fill_w, 2 * scale), by + 8 * scale), fill=color)
-            export_draw_text(
-                draw,
-                (bar_x + bar_w + 6 * scale, by + 4 * scale),
-                compact_currency(amount),
-                font,
-                color,
-                anchor="lm",
-            )
-    export_draw_text(
-        draw,
-        (pad, height - pad),
-        f"Projection = {current_year} YTD + remaining {previous_year} income.",
-        note_font,
-        muted,
-        anchor="ls",
-    )
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    return buffer.getvalue()
+    return render_income_export_canvas(rows, anchor=anchor, rounded=False)
 
 
 def filter_source_upload_columns(source_key: str, frame: pd.DataFrame) -> pd.DataFrame:
