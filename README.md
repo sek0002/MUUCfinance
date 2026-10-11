@@ -84,6 +84,7 @@ The hosted app lets you:
 - download the current source CSVs
 - apply the same date and category filters
 - export the filtered transactions table as CSV
+- compare current income YTD with the prior year, project year-end income from the prior year's remaining period, save a snapshot, and export the comparison as PNG
 
 Uploaded source CSVs are stored persistently in `MUUC_WEB_DATA_DIR/source/`.
 If `MUUC_WEB_DATA_DIR` is not set, the default path is `~/.muuc_finance_analyzer/web/source/`.

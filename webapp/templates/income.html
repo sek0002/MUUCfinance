@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="budget-shell income-shell">
+  {% if show_upload_prompt %}
+  <section class="banner warning compact-banner">
+    Missing source CSVs: {{ missing_sources | join(", ") }}. Use File Upload to add them.
+  </section>
+  {% endif %}
+
+  <section class="budget-top-grid">
+    <article class="panel budget-summary-panel">
+      <div class="panel-head tight">
+        <div>
+          <h2>{{ current_year }} Income</h2>
+          <div class="muted">Year to date through {{ current_ytd_end }}, compared with {{ previous_year }}</div>
+        </div>
+        <div class="actions">
+          <a class="ghost-link" href="/income/export.png">Export PNG</a>
+        </div>
+      </div>
+      <div class="income-summary-grid">
+        <div class="summary-item">
+          <span>{{ current_year }} YTD</span>
+          <strong class="summary-value income-value">{{ income_totals.current_ytd }}</strong>
+          <small>Through {{ current_ytd_end }}</small>
+        </div>
+        <div class="summary-item">
+          <span>{{ previous_year }} YTD</span>
+          <strong>{{ income_totals.previous_ytd }}</strong>
+          <small>Through {{ previous_ytd_end }}</small>
+        </div>
+        <div class="summary-item">
+          <span>YTD Change</span>
+          <strong class="{% if income_totals.is_ytd_up %}income-positive{% else %}income-negative{% endif %}">{{ income_totals.ytd_change }}</strong>
+          <small>{{ income_totals.ytd_change_percent }}</small>
+        </div>
+        <div class="summary-item">
+          <span>{{ previous_year }} Remaining</span>
+          <strong>{{ income_totals.previous_remaining }}</strong>
+          <small>{{ previous_remaining_start }} to {{ previous_year }}-12-31</small>
+        </div>
+        <div class="summary-item projection-summary-item">
+          <span>Projected {{ current_year }} EOY</span>
+          <strong>{{ income_totals.projected_eoy }}</strong>
+          <small>Current YTD + {{ previous_year }} remaining</small>
+        </div>
+        <div class="summary-item">
+          <span>{{ previous_year }} Full Year</span>
+          <strong>{{ income_totals.previous_full }}</strong>
+          <small>Projection baseline</small>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel budget-summary-panel">
+      <div class="panel-head tight">
+        <h2>Projection</h2>
+        <div class="muted">End of {{ current_year }}</div>
+      </div>
+      <div class="budget-readout income-readout">
+        <strong class="{% if projection_is_up %}under{% else %}over{% endif %}">{{ projection_ratio }}</strong>
+        <span>of {{ previous_year }} full-year income</span>
+        <small>
+          Projected change:
+          <b class="{% if income_totals.is_projection_up %}income-positive{% else %}income-negative{% endif %}">
+            {{ income_totals.projected_change }} · {{ income_totals.projected_change_percent }}
+          </b>
+        </small>
+      </div>
+    </article>
+  </section>
+
+  <section class="panel income-panel">
+    <div class="panel-head tight">
+      <div>
+        <h2>Income by Category</h2>
+        <div class="muted">Projection uses actual {{ current_year }} YTD plus the equivalent remaining {{ previous_year }} income.</div>
+      </div>
+      <div class="actions income-actions">
+        {% if saved_snapshot_on %}<span class="muted">Saved {{ saved_snapshot_on }}</span>{% endif %}
+        {% if can_persist_income %}
+        <form method="post" action="/income/save" class="inline-action-form">
+          <button type="submit">Save Income</button>
+        </form>
+        {% else %}
+        <span class="muted">Sandbox mode cannot save snapshots.</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="budget-legend" aria-label="Income comparison legend">
+      <span><i class="legend-swatch income-previous"></i>{{ previous_year }} YTD</span>
+      <span><i class="legend-swatch income-current"></i>{{ current_year }} YTD</span>
+      <span><i class="legend-swatch income-projected"></i>Projected {{ current_year }} EOY</span>
+    </div>
+
+    <div class="income-diagram-list">
+      {% for row in income_rows %}
+      <article class="income-row-card">
+        <div class="income-row-head">
+          <div>
+            <h3>{{ row.label }}</h3>
+            <p>
+              YTD
+              <span class="{% if row.is_ytd_up %}income-positive{% else %}income-negative{% endif %}">
+                {{ row.ytd_change_label }} · {{ row.ytd_change_percent_label }}
+              </span>
+              versus {{ previous_year }}
+            </p>
+          </div>
+          <strong class="income-projection-value">{{ row.projected_eoy_label }} projected</strong>
+        </div>
+
+        <div class="income-bars" aria-label="{{ row.label }} income comparison">
+          <div class="income-bar-line">
+            <span class="income-bar-name">{{ previous_year }} YTD</span>
+            <div class="income-track"><span class="income-bar previous" style="width: {{ row.previous_ytd_width }}%"></span></div>
+            <strong>{{ row.previous_ytd_label }}</strong>
+          </div>
+          <div class="income-bar-line">
+            <span class="income-bar-name">{{ current_year }} YTD</span>
+            <div class="income-track"><span class="income-bar current" style="width: {{ row.current_ytd_width }}%; background: {{ row.color }}"></span></div>
+            <strong>{{ row.current_ytd_label }}</strong>
+          </div>
+          <div class="income-bar-line">
+            <span class="income-bar-name">Projection</span>
+            <div class="income-track"><span class="income-bar projected" style="width: {{ row.projected_eoy_width }}%"></span></div>
+            <strong>{{ row.projected_eoy_label }}</strong>
+          </div>
+        </div>
+
+        <div class="income-row-values">
+          <span>{{ previous_year }} YTD {{ row.previous_ytd_label }}</span>
+          <span>{{ current_year }} YTD {{ row.current_ytd_label }}</span>
+          <span>{{ previous_year }} remaining {{ row.previous_remaining_label }}</span>
+          <span>{{ previous_year }} full year {{ row.previous_full_label }}</span>
+          <span>
+            Projection
+            <b class="{% if row.is_projection_up %}income-positive{% else %}income-negative{% endif %}">
+              {{ row.projected_change_label }} · {{ row.projected_change_percent_label }}
+            </b>
+          </span>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head tight">
+      <div>
+        <h2>Income Table</h2>
+        <div class="muted">All figures are grouped by the app’s current income rules.</div>
+      </div>
+    </div>
+    <div class="table-wrap compact-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>{{ previous_year }} YTD</th>
+            <th>{{ current_year }} YTD</th>
+            <th>YTD Change</th>
+            <th>{{ previous_year }} Remaining</th>
+            <th>Projected {{ current_year }} EOY</th>
+            <th>{{ previous_year }} Full Year</th>
+            <th>Projected Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in income_rows %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="amount">{{ row.previous_ytd_label }}</td>
+            <td class="amount">{{ row.current_ytd_label }}</td>
+            <td class="amount {% if row.is_ytd_up %}income-positive{% else %}income-negative{% endif %}">
+              {{ row.ytd_change_label }} · {{ row.ytd_change_percent_label }}
+            </td>
+            <td class="amount">{{ row.previous_remaining_label }}</td>
+            <td class="amount"><strong>{{ row.projected_eoy_label }}</strong></td>
+            <td class="amount">{{ row.previous_full_label }}</td>
+            <td class="amount {% if row.is_projection_up %}income-positive{% else %}income-negative{% endif %}">
+              {{ row.projected_change_label }} · {{ row.projected_change_percent_label }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>Total</th>
+            <th class="amount">{{ income_totals.previous_ytd }}</th>
+            <th class="amount">{{ income_totals.current_ytd }}</th>
+            <th class="amount {% if income_totals.is_ytd_up %}income-positive{% else %}income-negative{% endif %}">
+              {{ income_totals.ytd_change }} · {{ income_totals.ytd_change_percent }}
+            </th>
+            <th class="amount">{{ income_totals.previous_remaining }}</th>
+            <th class="amount">{{ income_totals.projected_eoy }}</th>
+            <th class="amount">{{ income_totals.previous_full }}</th>
+            <th class="amount {% if income_totals.is_projection_up %}income-positive{% else %}income-negative{% endif %}">
+              {{ income_totals.projected_change }} · {{ income_totals.projected_change_percent }}
+            </th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

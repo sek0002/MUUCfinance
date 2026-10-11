@@ -94,6 +94,7 @@ WEB_SOURCE_DIR = WEB_DATA_DIR / "source"
 WEB_RULES_DIR = WEB_DATA_DIR / "config"
 WEB_SESSION_DIR = WEB_DATA_DIR / "sessions"
 BUDGET_SETTINGS_FILENAME = "budget_settings.json"
+INCOME_SNAPSHOT_FILENAME = "income_snapshot.json"
 PERIOD_OPTIONS = [
     "All Dates",
     "Custom",
@@ -129,6 +130,17 @@ BUDGET_CATEGORIES = [
     {"label": "Compressor", "category": "compressor"},
     {"label": "Specialtrips", "category": "specialtrips"},
 ]
+INCOME_COMPARISON_CATEGORIES = [
+    {"label": "Air", "category": "air", "color": "#7dd3fc"},
+    {"label": "Courses", "category": "courses", "color": "#c4b5fd"},
+    {"label": "Gear Hire", "category": "gear hire", "color": "#86efac"},
+    {"label": "Memberships", "category": "memberships", "color": "#fda4af"},
+    {"label": "Social", "category": "social", "color": "#5eead4"},
+    {"label": "Merch", "category": "merch", "color": "#93c5fd"},
+    {"label": "Trips", "category": "trips", "color": "#fde047"},
+    {"label": "Special Trips", "category": "specialtrips", "color": "#d8b4fe"},
+    {"label": "Misc", "category": "misc", "color": "#fdba74"},
+]
 
 app = FastAPI(title=f"{APP_NAME} Web")
 app.add_middleware(
@@ -145,6 +157,7 @@ ASSET_VERSION_PATHS = [
     TEMPLATES_DIR / "base.html",
     TEMPLATES_DIR / "dashboard.html",
     TEMPLATES_DIR / "budget.html",
+    TEMPLATES_DIR / "income.html",
     TEMPLATES_DIR / "files.html",
     TEMPLATES_DIR / "rules.html",
     TEMPLATES_DIR / "login.html",
@@ -278,6 +291,11 @@ def current_rule_paths(request: Optional[Request] = None) -> tuple[Path, Path]:
 def current_budget_settings_path(request: Optional[Request] = None) -> Path:
     WEB_RULES_DIR.mkdir(parents=True, exist_ok=True)
     return WEB_RULES_DIR / BUDGET_SETTINGS_FILENAME
+
+
+def current_income_snapshot_path(request: Optional[Request] = None) -> Path:
+    WEB_RULES_DIR.mkdir(parents=True, exist_ok=True)
+    return WEB_RULES_DIR / INCOME_SNAPSHOT_FILENAME
 
 
 def source_backup_root(request: Optional[Request] = None) -> Path:
@@ -597,6 +615,185 @@ def budget_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ytd_percent": f"{ytd_percent:.1f}%",
         "is_over_ytd": current_ytd > ytd_budget and ytd_budget > 0,
     }
+
+
+def category_income_total(income: pd.DataFrame, category_key: str, start: date, end: date) -> float:
+    if income.empty or "category" not in income.columns or start > end:
+        return 0.0
+    category_series = income["category"].fillna("").astype(str).str.lower()
+    frame = income[category_series == category_key].copy()
+    if frame.empty:
+        return 0.0
+    filtered = filter_frame(frame, start, end)
+    return float(filtered["amount"].sum()) if not filtered.empty else 0.0
+
+
+def comparison_change(current: float, baseline: float) -> tuple[float, Optional[float]]:
+    difference = current - baseline
+    percent = None if baseline <= 0 else (difference / baseline) * 100
+    return difference, percent
+
+
+def signed_currency(value: float) -> str:
+    if abs(value) < 0.005:
+        return currency(0.0)
+    sign = "+" if value > 0 else "−"
+    return f"{sign}{currency(abs(value))}"
+
+
+def signed_percent(value: Optional[float]) -> str:
+    if value is None:
+        return "—"
+    if abs(value) < 0.05:
+        return "0.0%"
+    sign = "+" if value > 0 else "−"
+    return f"{sign}{abs(value):.1f}%"
+
+
+def income_comparison_rows(bundle: AnalysisBundle, anchor: Optional[date] = None) -> list[dict[str, Any]]:
+    today = anchor or date.today()
+    current_year = today.year
+    previous_year = current_year - 1
+    previous_ytd_end = same_month_day(previous_year, today)
+    previous_remaining_start = previous_ytd_end + timedelta(days=1)
+    rows: list[dict[str, Any]] = []
+
+    for item in INCOME_COMPARISON_CATEGORIES:
+        category_key = item["category"]
+        previous_ytd = category_income_total(
+            bundle.income,
+            category_key,
+            date(previous_year, 1, 1),
+            previous_ytd_end,
+        )
+        previous_remaining = category_income_total(
+            bundle.income,
+            category_key,
+            previous_remaining_start,
+            date(previous_year, 12, 31),
+        )
+        previous_full = previous_ytd + previous_remaining
+        current_ytd = category_income_total(
+            bundle.income,
+            category_key,
+            date(current_year, 1, 1),
+            today,
+        )
+        projected_eoy = current_ytd + previous_remaining
+        ytd_change, ytd_change_percent = comparison_change(current_ytd, previous_ytd)
+        projected_change, projected_change_percent = comparison_change(projected_eoy, previous_full)
+        rows.append(
+            {
+                "label": item["label"],
+                "category": category_key,
+                "color": item["color"],
+                "previous_ytd": previous_ytd,
+                "previous_ytd_label": currency(previous_ytd),
+                "previous_remaining": previous_remaining,
+                "previous_remaining_label": currency(previous_remaining),
+                "previous_full": previous_full,
+                "previous_full_label": currency(previous_full),
+                "current_ytd": current_ytd,
+                "current_ytd_label": currency(current_ytd),
+                "projected_eoy": projected_eoy,
+                "projected_eoy_label": currency(projected_eoy),
+                "ytd_change": ytd_change,
+                "ytd_change_label": signed_currency(ytd_change),
+                "ytd_change_percent": ytd_change_percent,
+                "ytd_change_percent_label": signed_percent(ytd_change_percent),
+                "projected_change": projected_change,
+                "projected_change_label": signed_currency(projected_change),
+                "projected_change_percent": projected_change_percent,
+                "projected_change_percent_label": signed_percent(projected_change_percent),
+                "is_ytd_up": ytd_change >= 0,
+                "is_projection_up": projected_change >= 0,
+            }
+        )
+    return rows
+
+
+def income_comparison_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    previous_ytd = sum(float(row["previous_ytd"]) for row in rows)
+    previous_remaining = sum(float(row["previous_remaining"]) for row in rows)
+    previous_full = sum(float(row["previous_full"]) for row in rows)
+    current_ytd = sum(float(row["current_ytd"]) for row in rows)
+    projected_eoy = sum(float(row["projected_eoy"]) for row in rows)
+    ytd_change, ytd_change_percent = comparison_change(current_ytd, previous_ytd)
+    projected_change, projected_change_percent = comparison_change(projected_eoy, previous_full)
+    return {
+        "previous_ytd_value": previous_ytd,
+        "previous_ytd": currency(previous_ytd),
+        "previous_remaining_value": previous_remaining,
+        "previous_remaining": currency(previous_remaining),
+        "previous_full_value": previous_full,
+        "previous_full": currency(previous_full),
+        "current_ytd_value": current_ytd,
+        "current_ytd": currency(current_ytd),
+        "projected_eoy_value": projected_eoy,
+        "projected_eoy": currency(projected_eoy),
+        "ytd_change_value": ytd_change,
+        "ytd_change": signed_currency(ytd_change),
+        "ytd_change_percent_value": ytd_change_percent,
+        "ytd_change_percent": signed_percent(ytd_change_percent),
+        "projected_change_value": projected_change,
+        "projected_change": signed_currency(projected_change),
+        "projected_change_percent_value": projected_change_percent,
+        "projected_change_percent": signed_percent(projected_change_percent),
+        "is_ytd_up": ytd_change >= 0,
+        "is_projection_up": projected_change >= 0,
+    }
+
+
+def load_income_snapshot(request: Optional[Request] = None) -> dict[str, Any]:
+    path = current_income_snapshot_path(request)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def save_income_snapshot(
+    request: Optional[Request],
+    rows: list[dict[str, Any]],
+    anchor: Optional[date] = None,
+) -> Path:
+    today = anchor or date.today()
+    totals = income_comparison_totals(rows)
+    payload = {
+        "saved_on": today.isoformat(),
+        "current_year": today.year,
+        "comparison_year": today.year - 1,
+        "projection_method": "current_ytd_plus_comparison_year_remaining",
+        "totals": {
+            key: value
+            for key, value in totals.items()
+            if key.endswith("_value") and not key.endswith("percent_value")
+        },
+        "categories": [
+            {
+                key: row[key]
+                for key in (
+                    "label",
+                    "category",
+                    "previous_ytd",
+                    "previous_remaining",
+                    "previous_full",
+                    "current_ytd",
+                    "projected_eoy",
+                    "ytd_change",
+                    "projected_change",
+                )
+            }
+            for row in rows
+        ],
+    }
+    path = current_income_snapshot_path(request)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def compact_currency(value: float) -> str:
@@ -1043,6 +1240,149 @@ def render_budget_export_fallback_png(rows: list[dict[str, Any]]) -> bytes:
         draw.text((bar_x + bar_w + 8 * scale, y + 5 * scale), f"{percent:.0f}%", fill="#64748b", font=font)
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] = None) -> bytes:
+    today = anchor or date.today()
+    current_year = today.year
+    previous_year = current_year - 1
+    totals = income_comparison_totals(rows)
+    scale = 2
+    width = 780 * scale
+    pad = 28 * scale
+    summary_h = 86 * scale
+    legend_h = 34 * scale
+    row_h = 54 * scale
+    chart_top = pad + 62 * scale + summary_h + legend_h
+    height = chart_top + row_h * len(rows) + 42 * scale
+
+    image = Image.new("RGB", (width, height), "#f8fafc")
+    draw = ImageDraw.Draw(image)
+    title_font = budget_export_font(22 * scale, bold=True)
+    subtitle_font = budget_export_font(10 * scale)
+    summary_label_font = budget_export_font(9 * scale, bold=True)
+    summary_value_font = budget_export_font(15 * scale, bold=True)
+    label_font = budget_export_font(10 * scale, bold=True)
+    value_font = budget_export_font(8 * scale, bold=True)
+    note_font = budget_export_font(8 * scale)
+
+    text = "#111827"
+    muted = "#64748b"
+    line = "#dbe3ec"
+    previous_color = "#94a3b8"
+    current_color = "#14b8a6"
+    projected_color = "#8b5cf6"
+
+    export_draw_text(draw, (pad, pad), "Income comparison", title_font, text)
+    export_draw_text(
+        draw,
+        (pad, pad + 34 * scale),
+        f"{current_year} YTD to {today.strftime('%d %b')} · projection adds the equivalent remaining {previous_year} income",
+        subtitle_font,
+        muted,
+    )
+
+    summary_items = [
+        (f"{current_year} YTD", str(totals["current_ytd"]), current_color),
+        (f"{previous_year} YTD", str(totals["previous_ytd"]), previous_color),
+        (
+            "YTD change",
+            f"{'+' if float(totals['ytd_change_value']) >= 0 else '−'}{compact_currency(abs(float(totals['ytd_change_value'])))} · {totals['ytd_change_percent']}",
+            current_color if totals["is_ytd_up"] else "#ef4444",
+        ),
+        ("Projected EOY", str(totals["projected_eoy"]), projected_color),
+        (f"{previous_year} full year", str(totals["previous_full"]), text),
+    ]
+    summary_y = pad + 58 * scale
+    gap = 8 * scale
+    card_w = (width - pad * 2 - gap * (len(summary_items) - 1)) // len(summary_items)
+    for index, (label, value, color) in enumerate(summary_items):
+        x = pad + index * (card_w + gap)
+        export_rounded_rectangle(
+            draw,
+            (x, summary_y, x + card_w, summary_y + summary_h - 12 * scale),
+            radius=8 * scale,
+            fill="#ffffff",
+            outline=line,
+            width=scale,
+        )
+        export_draw_text(draw, (x + 10 * scale, summary_y + 13 * scale), label, summary_label_font, muted)
+        fitted_value = fit_export_text(draw, value, summary_value_font, card_w - 20 * scale)
+        export_draw_text(draw, (x + 10 * scale, summary_y + 39 * scale), fitted_value, summary_value_font, color)
+
+    legend_y = pad + 58 * scale + summary_h
+    legend_items = [
+        (f"{previous_year} YTD", previous_color),
+        (f"{current_year} YTD", current_color),
+        (f"Projected {current_year} EOY", projected_color),
+    ]
+    legend_x = pad
+    for label, color in legend_items:
+        draw.rounded_rectangle(
+            (legend_x, legend_y, legend_x + 16 * scale, legend_y + 8 * scale),
+            radius=4 * scale,
+            fill=color,
+        )
+        export_draw_text(draw, (legend_x + 22 * scale, legend_y + 4 * scale), label, note_font, muted, anchor="lm")
+        legend_x += (22 + max(82, len(label) * 5)) * scale
+
+    label_w = 112 * scale
+    value_w = 92 * scale
+    bar_x = pad + label_w
+    bar_w = width - bar_x - value_w - pad
+    max_value = max(
+        [
+            float(row[key])
+            for row in rows
+            for key in ("previous_ytd", "current_ytd", "projected_eoy")
+        ]
+        + [1.0]
+    )
+    for index, row in enumerate(rows):
+        y = chart_top + index * row_h
+        if index % 2 == 0:
+            draw.rectangle((pad, y, width - pad, y + row_h - 4 * scale), fill="#f1f5f9")
+        export_draw_text(draw, (pad + 6 * scale, y + 23 * scale), str(row["label"]), label_font, text, anchor="lm")
+        series = [
+            (float(row["previous_ytd"]), previous_color, 8),
+            (float(row["current_ytd"]), current_color, 21),
+            (float(row["projected_eoy"]), projected_color, 34),
+        ]
+        for amount, color, y_offset in series:
+            by = y + y_offset * scale
+            draw.rounded_rectangle(
+                (bar_x, by, bar_x + bar_w, by + 8 * scale),
+                radius=4 * scale,
+                fill="#e2e8f0",
+            )
+            fill_w = int((amount / max_value) * bar_w) if max_value > 0 else 0
+            if fill_w > 0:
+                draw.rounded_rectangle(
+                    (bar_x, by, bar_x + max(fill_w, 2 * scale), by + 8 * scale),
+                    radius=4 * scale,
+                    fill=color,
+                )
+            export_draw_text(
+                draw,
+                (bar_x + bar_w + 8 * scale, by + 4 * scale),
+                compact_currency(amount),
+                value_font,
+                color,
+                anchor="lm",
+            )
+        draw.line((pad, y + row_h - 4 * scale, width - pad, y + row_h - 4 * scale), fill=line, width=scale)
+
+    note_y = chart_top + row_h * len(rows) + 8 * scale
+    export_draw_text(
+        draw,
+        (pad, note_y),
+        f"Projection = {current_year} YTD + {previous_year} income from {(same_month_day(previous_year, today) + timedelta(days=1)).strftime('%d %b')} to 31 Dec.",
+        note_font,
+        muted,
+    )
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
 
 
@@ -2326,6 +2666,48 @@ def budget_context(request: Request, message: Optional[str]) -> dict[str, Any]:
     }
 
 
+def income_context(request: Request, message: Optional[str]) -> dict[str, Any]:
+    bundle, missing_sources = load_bundle_safe(request)
+    today = date.today()
+    previous_year = today.year - 1
+    previous_ytd_end = same_month_day(previous_year, today)
+    rows = income_comparison_rows(bundle, today)
+    totals = income_comparison_totals(rows)
+    for row in rows:
+        row_max = max(
+            float(row["previous_ytd"]),
+            float(row["current_ytd"]),
+            float(row["projected_eoy"]),
+            1.0,
+        )
+        row["previous_ytd_width"] = (float(row["previous_ytd"]) / row_max) * 100
+        row["current_ytd_width"] = (float(row["current_ytd"]) / row_max) * 100
+        row["projected_eoy_width"] = (float(row["projected_eoy"]) / row_max) * 100
+    previous_full = float(totals["previous_full_value"])
+    projected_eoy = float(totals["projected_eoy_value"])
+    projection_ratio = 0.0 if previous_full <= 0 else (projected_eoy / previous_full) * 100
+    saved_snapshot = load_income_snapshot(request)
+    return {
+        **base_template_context(request),
+        "message": message,
+        "active_page": "income",
+        "missing_sources": missing_sources,
+        "show_upload_prompt": bool(missing_sources),
+        "income_rows": rows,
+        "income_totals": totals,
+        "current_year": today.year,
+        "previous_year": previous_year,
+        "current_ytd_end": today.isoformat(),
+        "previous_ytd_end": previous_ytd_end.isoformat(),
+        "previous_remaining_start": (previous_ytd_end + timedelta(days=1)).isoformat(),
+        "projection_ratio": f"{projection_ratio:.1f}%",
+        "projection_is_up": projected_eoy >= previous_full,
+        "income_snapshot_path": str(current_income_snapshot_path(request)),
+        "saved_snapshot_on": str(saved_snapshot.get("saved_on", "")),
+        "can_persist_income": not is_demo_session(request),
+    }
+
+
 def files_context(request: Request, message: Optional[str]) -> dict[str, Any]:
     return {
         **base_template_context(request),
@@ -2489,6 +2871,53 @@ def budget_page(request: Request, message: Optional[str] = Query(None)) -> HTMLR
     if auth_redirect:
         return auth_redirect
     return templates.TemplateResponse("budget.html", budget_context(request, message))
+
+
+@app.get("/income", response_class=HTMLResponse)
+def income_page(request: Request, message: Optional[str] = Query(None)) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="income.html",
+        context=income_context(request, message),
+    )
+
+
+@app.get("/income/export.png")
+def export_income_chart(request: Request) -> StreamingResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    bundle, _missing_sources = load_bundle_safe(request)
+    rows = income_comparison_rows(bundle)
+    png_bytes = render_income_export_png(rows)
+    filename = f"income-comparison-{date.today().isoformat()}.png"
+    return StreamingResponse(
+        io.BytesIO(png_bytes),
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/income/save")
+def save_income_page(request: Request) -> RedirectResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    if is_demo_session(request):
+        return RedirectResponse(
+            url="/income?message=Sandbox+mode+cannot+save+income+snapshots.",
+            status_code=303,
+        )
+    bundle, _missing_sources = load_bundle_safe(request)
+    rows = income_comparison_rows(bundle)
+    save_income_snapshot(request, rows)
+    return RedirectResponse(
+        url=f"/income?{urlencode({'message': 'Saved income snapshot.'})}",
+        status_code=303,
+    )
 
 
 @app.get("/budget/export.png")
