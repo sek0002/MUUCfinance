@@ -1325,7 +1325,8 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
     ]
     legend_x = pad
     for label, color in legend_items:
-        draw.rounded_rectangle(
+        export_rounded_rectangle(
+            draw,
             (legend_x, legend_y, legend_x + 16 * scale, legend_y + 8 * scale),
             radius=4 * scale,
             fill=color,
@@ -1357,14 +1358,16 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
         ]
         for amount, color, y_offset in series:
             by = y + y_offset * scale
-            draw.rounded_rectangle(
+            export_rounded_rectangle(
+                draw,
                 (bar_x, by, bar_x + bar_w, by + 8 * scale),
                 radius=4 * scale,
                 fill="#e2e8f0",
             )
             fill_w = int((amount / max_value) * bar_w) if max_value > 0 else 0
             if fill_w > 0:
-                draw.rounded_rectangle(
+                export_rounded_rectangle(
+                    draw,
                     (bar_x, by, bar_x + max(fill_w, 2 * scale), by + 8 * scale),
                     radius=4 * scale,
                     fill=color,
@@ -1389,6 +1392,91 @@ def render_income_export_png(rows: list[dict[str, Any]], anchor: Optional[date] 
     )
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def render_income_export_fallback_png(rows: list[dict[str, Any]], anchor: Optional[date] = None) -> bytes:
+    today = anchor or date.today()
+    current_year = today.year
+    previous_year = current_year - 1
+    totals = income_comparison_totals(rows)
+    scale = 2
+    width = 680 * scale
+    pad = 16 * scale
+    title_h = 56 * scale
+    row_h = 54 * scale
+    note_h = 22 * scale
+    height = pad * 2 + title_h + row_h * len(rows) + note_h
+    label_w = 96 * scale
+    value_w = 72 * scale
+    bar_x = pad + label_w
+    bar_w = width - bar_x - value_w - pad
+
+    image = Image.new("RGB", (width, height), "#f8fafc")
+    draw = ImageDraw.Draw(image)
+    title_font = budget_export_font(16 * scale, bold=True)
+    font = budget_export_font(8 * scale, bold=True)
+    note_font = budget_export_font(7 * scale)
+    previous_color = "#94a3b8"
+    current_color = "#14b8a6"
+    projected_color = "#8b5cf6"
+    track_color = "#e2e8f0"
+    text_color = "#111827"
+    muted = "#64748b"
+
+    export_draw_text(draw, (pad, pad), "Income comparison", title_font, text_color)
+    export_draw_text(
+        draw,
+        (pad, pad + 26 * scale),
+        f"{current_year} YTD {totals['current_ytd']} | projected EOY {totals['projected_eoy']}",
+        note_font,
+        muted,
+    )
+
+    max_value = max(
+        [
+            float(row[key])
+            for row in rows
+            for key in ("previous_ytd", "current_ytd", "projected_eoy")
+        ]
+        + [1.0]
+    )
+    series_keys = [
+        ("previous_ytd", previous_color),
+        ("current_ytd", current_color),
+        ("projected_eoy", projected_color),
+    ]
+    chart_top = pad + title_h
+    for index, row in enumerate(rows):
+        y = chart_top + index * row_h
+        if index % 2 == 0:
+            draw.rectangle((pad, y, width - pad, y + row_h - 2 * scale), fill="#f1f5f9")
+        export_draw_text(draw, (pad + 4 * scale, y + 22 * scale), str(row["label"]), font, text_color, anchor="lm")
+        for series_index, (key, color) in enumerate(series_keys):
+            amount = float(row[key])
+            by = y + (6 + series_index * 13) * scale
+            draw.rectangle((bar_x, by, bar_x + bar_w, by + 8 * scale), fill=track_color)
+            fill_w = int((amount / max_value) * bar_w) if max_value > 0 else 0
+            if fill_w > 0:
+                draw.rectangle((bar_x, by, bar_x + max(fill_w, 2 * scale), by + 8 * scale), fill=color)
+            export_draw_text(
+                draw,
+                (bar_x + bar_w + 6 * scale, by + 4 * scale),
+                compact_currency(amount),
+                font,
+                color,
+                anchor="lm",
+            )
+    export_draw_text(
+        draw,
+        (pad, height - pad),
+        f"Projection = {current_year} YTD + remaining {previous_year} income.",
+        note_font,
+        muted,
+        anchor="ls",
+    )
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -2898,7 +2986,11 @@ def export_income_chart(request: Request) -> StreamingResponse:
         return auth_redirect
     bundle, _missing_sources = load_bundle_safe(request)
     rows = income_comparison_rows(bundle)
-    png_bytes = render_income_export_png(rows)
+    try:
+        png_bytes = render_income_export_png(rows)
+    except Exception:
+        traceback.print_exc()
+        png_bytes = render_income_export_fallback_png(rows)
     filename = f"income-comparison-{date.today().isoformat()}.png"
     return StreamingResponse(
         io.BytesIO(png_bytes),
