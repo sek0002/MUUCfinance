@@ -1255,7 +1255,7 @@ def render_income_export_canvas(
     scale = 2
     pad = 5 * scale
     label_w = 76 * scale
-    bar_w = 244 * scale
+    bar_w = 305 * scale
     change_w = 96 * scale
     title_h = 24 * scale
     summary_row_h = 22 * scale
@@ -1346,14 +1346,14 @@ def render_income_export_canvas(
         },
     ]
     summary_max = max([float(item["value"]) for item in summary_rows] + [1.0])
-    bar_h = 15 * scale
+    bar_h = 9 * scale
     for index, item in enumerate(summary_rows):
         y = pad + title_h + index * summary_row_h
         cy = y + summary_row_h // 2
         by = cy - bar_h // 2
         value = float(item["value"])
         export_draw_text(draw, (pad, cy), str(item["label"]), label_font, text_color, anchor="lm")
-        draw_bar(bar_x, by, bar_w, bar_h, track_color, track_edge)
+        draw_bar(bar_x, by, bar_w, bar_h, track_color)
         fill_w = int(value / summary_max * bar_w) if summary_max else 0
         if fill_w > 0:
             draw_bar(bar_x, by, max(fill_w, 2 * scale), bar_h, str(item["color"]))
@@ -1382,6 +1382,7 @@ def render_income_export_canvas(
         (f"{current_year} YTD", current_color),
         (f"Projected {current_year}", projected_color),
     ]
+    export_draw_text(draw, (pad, legend_y), "Key", note_font, text_color, anchor="lm")
     legend_x = bar_x
     for legend_label, legend_color in legend_items:
         draw_bar(legend_x, legend_y - 4 * scale, 12 * scale, 8 * scale, legend_color)
